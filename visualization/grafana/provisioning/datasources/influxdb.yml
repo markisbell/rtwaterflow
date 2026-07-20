@@ -11,8 +11,8 @@ datasources:
     isDefault: true
     jsonData:
       version: Flux
-      organization: rtheatflow
-      defaultBucket: heatflow
+      organization: rtwaterflow
+      defaultBucket: waterflow
       tlsSkipVerify: true
     secureJsonData:
-      token: rtheatflow-dev-token
+      token: rtwaterflow-dev-token

@@ -1,58 +1,77 @@
-"""Regression pins on pandapipes 0.14.0 behavior the platform depends on
-(SPEC §11; migrated from scripts/validate_core.py)."""
+"""Regression pins on pandapipes 0.14.0 behavior the water platform depends
+on. Every pin was runtime-verified on the pinned version (project convention:
+pins are re-derived, never copied from docs)."""
 from __future__ import annotations
 
 import numpy as np
 import pandapipes as pp
 import pytest
-from pandapipes.networks import schutterwald_heat
 
-from rtheatflow.network_builder import build_network
+from rtwaterflow.network_builder import build_network
 
 
-# --- heat_consumer pair validation (SPEC §3.2) ------------------------------
-
-@pytest.mark.parametrize("kwargs", [
-    dict(qext_w=1000.0),                                 # only one setpoint
-    dict(qext_w=1000.0, deltat_k=20.0, treturn_k=330.0), # three setpoints
-    dict(deltat_k=20.0, treturn_k=330.0),                # forbidden combination
-])
-def test_heat_consumer_rejects_invalid_pairs(kwargs):
+def _mini_net():
     net = pp.create_empty_network(fluid="water")
-    a = pp.create_junction(net, pn_bar=5, tfluid_k=358.15)
-    b = pp.create_junction(net, pn_bar=5, tfluid_k=358.15)
-    with pytest.raises(Exception):
-        pp.create_heat_consumer(net, a, b, **kwargs)
+    a = pp.create_junction(net, pn_bar=3, tfluid_k=293.15, height_m=100.0)
+    b = pp.create_junction(net, pn_bar=3, tfluid_k=293.15, height_m=90.0)
+    pp.create_pipe_from_parameters(net, a, b, length_km=0.1,
+                                   inner_diameter_mm=100, k_mm=0.1)
+    pp.create_ext_grid(net, junction=a, p_bar=3.0, type="p")
+    pp.create_sink(net, junction=b, mdot_kg_per_s=1.0)
+    return net
 
 
-# --- text_k must be explicit (SPEC Appendix B item 4) ------------------------
-
-def test_builder_sets_text_k_explicitly(appendix_a_inputs):
-    """The signature default 0 means 0 K ambient (~4x fake losses); the
-    builder must store the ground temperature on every pipe."""
-    net, _ = build_network(appendix_a_inputs)
-    assert np.allclose(net.pipe.text_k.to_numpy(), 283.15)
-
-
-# --- nonlinear_method="automatic" is unusable in bidirectional (App. B 2) ----
-
-def test_automatic_nonlinear_method_raises_in_bidirectional():
-    """The 0.14.0 damping-adaptation branch is broken for bidirectional
-    (source TODO in pipeflow.finalize_iteration): once errors increase
-    mid-iteration it hits a shape-mismatch ValueError. Only hard cases
-    trigger the branch — pin it on the validated one. This is why the
-    retry ladder must never use nonlinear_method="automatic"."""
-    net = schutterwald_heat(tflow_degC=70, treturn_degC=45)
-    with pytest.raises(ValueError, match="broadcast"):
-        pp.pipeflow(net, mode="bidirectional", iter=200, alpha=0.2,
-                    nonlinear_method="automatic")
+def test_hydraulics_mode_with_colebrook_accepted():
+    """mode='hydraulics' + friction_model='colebrook' is the platform solve;
+    it must converge and populate res_junction/res_pipe/res_sink/res_ext_grid."""
+    net = _mini_net()
+    pp.pipeflow(net, mode="hydraulics", friction_model="colebrook")
+    assert net.converged
+    for table in ("res_junction", "res_pipe", "res_sink", "res_ext_grid"):
+        assert len(net[table])
 
 
-# --- ISOPLUS std types carry per-length U-values (SPEC §3.1) -----------------
+def test_height_m_drives_elevation_pressure():
+    """junction.height_m feeds the hydrostatic term: 10 m of drop adds
+    ~0.98 bar at near-zero flow. junction_geodata has NO hydraulic effect."""
+    net = _mini_net()
+    net.sink.at[0, "mdot_kg_per_s"] = 0.001  # ~zero friction
+    pp.pipeflow(net, mode="hydraulics", friction_model="colebrook")
+    dp = net.res_junction.p_bar.iloc[1] - net.res_junction.p_bar.iloc[0]
+    assert dp == pytest.approx(0.0981 * 10.0, abs=0.01)
 
-def test_isoplus_std_types_available(appendix_a_inputs):
-    net, _ = build_network(appendix_a_inputs)
-    assert set(net.pipe.std_type.dropna()) == {
-        "ISOPLUS_DRE100_STD", "ISOPLUS_DRE80_STD", "ISOPLUS_DRE50_STD"}
-    # u values were materialized onto the pipe table (auto-converted per-area)
-    assert (net.pipe.u_w_per_m2k > 0).all()
+
+def test_ext_grid_reports_withdrawal_negative():
+    """Sign convention pin: an ext_grid FEEDING the net reports negative
+    mdot_kg_per_s (flow out of the grid). The wire carries the magnitude."""
+    net = _mini_net()
+    pp.pipeflow(net, mode="hydraulics", friction_model="colebrook")
+    assert net.res_ext_grid.mdot_kg_per_s.iloc[0] == pytest.approx(-1.0,
+                                                                   rel=1e-3)
+
+
+def test_swamee_jain_spelling_is_hyphenated():
+    """The third friction model's string literal is 'swamee-jain' (HYPHEN).
+    'swamee_jain' silently falls through to nikuradse in 0.14.0 — pin the
+    accepted spelling so the future EPANET cross-validation uses it right."""
+    net = _mini_net()
+    pp.pipeflow(net, mode="hydraulics", friction_model="swamee-jain")
+    assert net.converged
+
+
+def test_builder_single_layer_no_thermal_columns(hillside_inputs):
+    """The water builder creates ONE junction per node with height_m set and
+    passes no thermal pipe parameters (text_k stays at the signature default
+    — it is inert in hydraulics mode)."""
+    net, profiles = build_network(hillside_inputs)
+    assert len(net.junction) == 5          # no _s/_r pair doubling
+    assert len(net.pipe) == 4
+    assert np.allclose(
+        sorted(net.junction.height_m.to_numpy()),
+        sorted([352.0, 358.0, 361.0, 346.0, 400.0]))
+    assert len(net.ext_grid) == 1
+    assert net.ext_grid.at[0, "p_bar"] == pytest.approx(0.5)
+    assert len(net.sink) == 2
+    # roughness explicit per pipe (never the library default)
+    assert np.allclose(sorted(net.pipe.k_mm.to_numpy()),
+                       sorted([0.2, 0.2, 0.2, 0.5]))

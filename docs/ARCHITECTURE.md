@@ -1,3 +1,9 @@
+> **STALE — fork-parent document.** This file describes **rtheatflow**, the
+> district-heating fork parent of rtwaterflow. The water platform (M0+) is
+> governed by `../IMPLEMENTATION_ROADMAP.md` and `../TECHNICAL_FOUNDATIONS.md`.
+> Retained for platform-architecture reference (engine/StateStore/retry-ladder/
+> recorder conventions still describe the shared platform core); every thermal
+> section (heating curves, supply/return pairs, transient mode) does NOT apply.
 # rtheatflow — Architecture
 
 Real-time district-heating simulation platform on **pandapipes 0.14.0**,

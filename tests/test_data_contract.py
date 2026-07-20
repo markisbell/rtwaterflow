@@ -1,159 +1,158 @@
-"""Five-file contract validation: schema rules + cross-document checks (SPEC §5)."""
+"""Five-file water contract validation: schema rules + cross-document checks."""
 from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
 
-from rtheatflow.data_loader import DataContractError, cross_validate, load_network
-from rtheatflow.models import (
+from rtwaterflow.data_loader import DataContractError, cross_validate, load_network
+from rtwaterflow.models import (
     ConsumerSpec,
     ConsumersFile,
     NetworkStructure,
     PipeSpec,
-    ProducersFile,
+    SupplyFile,
 )
-from rtheatflow.net_inputs import NetInputs
+from rtwaterflow.net_inputs import NetInputs
 
-from conftest import APPENDIX_A_DIR
+from conftest import HILLSIDE_DIR
 
 
 def _rebuild(docs) -> NetInputs:
     """Validate mutated fixture documents through the full contract path."""
-    from rtheatflow.models import PipesFile, WeatherFile
+    from rtwaterflow.models import EnvironmentFile, PipesFile
 
     inputs = NetInputs(
         name=docs["network_structure"]["name"],
         structure=NetworkStructure.model_validate(docs["network_structure"]),
         pipes=PipesFile.model_validate(docs["pipes"]),
         consumers=ConsumersFile.model_validate(docs["consumers"]),
-        producers=ProducersFile.model_validate(docs["producers"]),
-        weather=WeatherFile.model_validate(docs["weather"]),
+        supply=SupplyFile.model_validate(docs["supply"]),
+        environment=EnvironmentFile.model_validate(docs["environment"]),
     )
     cross_validate(inputs)
     return inputs
 
 
 def test_fixture_loads_clean():
-    inputs = load_network(APPENDIX_A_DIR)
-    assert inputs.name == "appendix_a"
+    inputs = load_network(HILLSIDE_DIR)
+    assert inputs.name == "Tutorial Hanglage"
     assert inputs.n_days == 1
-    assert len(inputs.consumers.consumers) == 3
+    assert len(inputs.consumers.consumers) == 2
 
 
-# --- consumer control-pair rule (SPEC §3.2: qext_w + exactly one partner) ---
+# --- schema rules -----------------------------------------------------------
 
-@pytest.mark.parametrize("extra", [
-    {},                                                        # no partner
-    {"treturn_k": [328.15] * 4, "deltat_k": 30.0},             # two partners
-    {"deltat_k": 30.0, "controlled_mdot_kg_per_s": 0.25},      # two partners
-])
-def test_consumer_partner_rule(extra):
-    base = dict(node="n1", q_sh_w=[1000.0] * 4, q_dhw_w=[0.0] * 4,
-                q_design_w=1000.0)
-    with pytest.raises(ValidationError, match="exactly one of"):
-        ConsumerSpec.model_validate({**base, **extra})
+def test_consumer_needs_positive_demand():
+    with pytest.raises(ValidationError):
+        ConsumerSpec.model_validate(dict(node="j1", mdot_kg_per_s=0.0))
+    with pytest.raises(ValidationError):
+        ConsumerSpec.model_validate(dict(node="j1", mdot_kg_per_s=-1.0))
 
 
-def test_consumer_treturn_kelvin_guard():
-    # a tutorial passes treturn_k=50 (= -223 degC); the contract rejects it
-    with pytest.raises(ValidationError, match="Kelvin"):
+def test_consumer_rejects_thermal_fields():
+    """The heat-era fields must be gone (extra='forbid' guards the contract)."""
+    with pytest.raises(ValidationError):
         ConsumerSpec.model_validate(dict(
-            node="n1", q_sh_w=[1000.0] * 4, q_dhw_w=[0.0] * 4,
-            treturn_k=[50.0] * 4, q_design_w=1000.0))
+            node="j1", mdot_kg_per_s=0.1, q_sh_w=[1000.0]))
 
 
-# --- pipe rule: std_type XOR explicit parameters (SPEC §3.1) ---
+def test_pipe_needs_diameter():
+    with pytest.raises(ValidationError):
+        PipeSpec.model_validate(dict(from_node="a", to_node="b",
+                                     length_km=0.1))
 
-def test_pipe_std_type_excludes_overrides():
-    with pytest.raises(ValidationError, match="mutually exclusive"):
+
+def test_pipe_rejects_self_loop():
+    with pytest.raises(ValidationError, match="self-loop"):
+        PipeSpec.model_validate(dict(from_node="a", to_node="a",
+                                     length_km=0.1, inner_diameter_mm=100))
+
+
+def test_pipe_rejects_std_type():
+    """The heat-era ISOPLUS std_type path is gone from the water contract."""
+    with pytest.raises(ValidationError):
         PipeSpec.model_validate(dict(
             from_node="a", to_node="b", length_km=0.1,
-            std_type="ISOPLUS_DRE100_STD", u_w_per_m2k=1.0))
+            std_type="ISOPLUS_DRE100_STD"))
 
 
-def test_pipe_needs_type_or_parameters():
-    with pytest.raises(ValidationError, match="std_type or"):
-        PipeSpec.model_validate(dict(from_node="a", to_node="b", length_km=0.1))
+def test_environment_length_check():
+    from rtwaterflow.models import EnvironmentFile
+    with pytest.raises(ValidationError, match="length"):
+        EnvironmentFile.model_validate(dict(
+            resolution_minutes=15, steps=96, t_air_c=[10.0] * 10))
 
 
-# --- exactly one slack (SPEC §3.1 single-pressure-slack rule) ---
+# --- exactly one slack (single head source in M0) ---------------------------
 
-def test_second_slack_rejected(appendix_a_docs):
-    docs = appendix_a_docs
-    docs["producers"]["producers"].append({
-        "node": "n3", "kind": "slack",
-        "p_flow_bar": 6.0, "plift_bar": 2.0, "t_flow_k": 358.15})
+def test_second_slack_rejected(hillside_docs):
+    docs = hillside_docs
+    docs["supply"]["supplies"].append({
+        "node": "j1", "kind": "ext_grid", "p_bar": 3.0})
     with pytest.raises(ValidationError, match="exactly one slack"):
         _rebuild(docs)
 
 
-def test_no_slack_rejected(appendix_a_docs):
-    docs = appendix_a_docs
-    docs["producers"]["producers"] = []
+def test_no_slack_rejected(hillside_docs):
+    docs = hillside_docs
+    docs["supply"]["supplies"] = []
     with pytest.raises(ValidationError):
         _rebuild(docs)
 
 
-# --- cross-document checks ---
+# --- cross-document checks ---------------------------------------------------
 
-def test_unknown_node_rejected(appendix_a_docs):
-    docs = appendix_a_docs
+def test_unknown_node_rejected(hillside_docs):
+    docs = hillside_docs
     docs["consumers"]["consumers"][0]["node"] = "nope"
     with pytest.raises(DataContractError, match="unknown node"):
         _rebuild(docs)
 
 
-def test_array_length_mismatch_rejected(appendix_a_docs):
-    docs = appendix_a_docs
-    docs["consumers"]["consumers"][0]["q_sh_w"] = [80000.0] * 10
-    with pytest.raises(DataContractError, match="length"):
+def test_partial_day_horizon_rejected(hillside_docs):
+    docs = hillside_docs
+    docs["environment"]["steps"] = 48
+    docs["environment"]["t_air_c"] = [10.0] * 48
+    with pytest.raises(DataContractError, match="whole number of days"):
         _rebuild(docs)
 
 
-def test_weather_horizon_mismatch_rejected(appendix_a_docs):
-    docs = appendix_a_docs
-    docs["weather"]["steps"] = 48
-    docs["weather"]["t_amb_c"] = [0.0] * 48
-    docs["weather"]["t_ground_c"] = [10.0] * 48
-    with pytest.raises(DataContractError, match="horizon"):
-        _rebuild(docs)
-
-
-def test_unreachable_consumer_rejected(appendix_a_docs):
-    docs = appendix_a_docs
-    # island: n4/n5 connected to each other but not to the slack's component
+def test_unreachable_consumer_rejected(hillside_docs):
+    docs = hillside_docs
+    # island: j6/j7 connected to each other but not to the slack's component
     docs["network_structure"]["junctions"] += [
-        {"name": "n4", "kind": "consumer", "geo": [48.1, 7.9], "pn_bar": 6},
-        {"name": "n5", "kind": "node", "geo": [48.1, 7.91], "pn_bar": 6},
+        {"name": "j6", "kind": "consumer", "geo": [49.47, 8.99],
+         "elevation_m": 350.0, "pn_bar": 1.0},
+        {"name": "j7", "kind": "node", "geo": [49.471, 8.991],
+         "elevation_m": 351.0, "pn_bar": 1.0},
     ]
     docs["pipes"]["pipes"].append({
-        "from_node": "n4", "to_node": "n5",
-        "std_type": "ISOPLUS_DRE50_STD", "length_km": 0.1})
-    steps = docs["consumers"]["steps"]
+        "from_node": "j6", "to_node": "j7",
+        "length_km": 0.1, "inner_diameter_mm": 100})
     docs["consumers"]["consumers"].append({
-        "node": "n4", "name": "island consumer",
-        "q_sh_w": [1000.0] * steps, "q_dhw_w": [0.0] * steps,
-        "treturn_k": [328.15] * steps, "q_design_w": 1000.0})
+        "node": "j6", "name": "island consumer", "mdot_kg_per_s": 0.1})
     with pytest.raises(DataContractError, match="not reachable"):
         _rebuild(docs)
 
 
-def test_dead_end_without_consumer_rejected(appendix_a_docs):
-    """Zero-flow guard (SPEC §3.2): a stub trench with nothing attached is
-    hydraulically singular and must be rejected at load time."""
-    docs = appendix_a_docs
+def test_dead_end_without_consumer_is_legal(hillside_docs):
+    """Hydraulics-only dead ends are LEGAL (stagnation is an M4 compliance
+    finding, not a solver singularity like in the thermal fork parent)."""
+    docs = hillside_docs
     docs["network_structure"]["junctions"].append(
-        {"name": "n4", "kind": "node", "geo": [48.0, 7.816], "pn_bar": 6})
+        {"name": "j8", "kind": "node", "geo": [49.468, 8.985],
+         "elevation_m": 355.0, "pn_bar": 1.0})
     docs["pipes"]["pipes"].append({
-        "from_node": "n3", "to_node": "n4",
-        "std_type": "ISOPLUS_DRE50_STD", "length_km": 0.05})
-    with pytest.raises(DataContractError, match="dead-end"):
-        _rebuild(docs)
+        "from_node": "j1", "to_node": "j8",
+        "length_km": 0.05, "inner_diameter_mm": 100})
+    inputs = _rebuild(docs)  # must NOT raise
+    assert any(j.name == "j8" for j in inputs.structure.junctions)
 
 
-def test_isolated_node_rejected(appendix_a_docs):
-    docs = appendix_a_docs
+def test_isolated_node_rejected(hillside_docs):
+    docs = hillside_docs
     docs["network_structure"]["junctions"].append(
-        {"name": "lonely", "kind": "node", "geo": [48.2, 7.9], "pn_bar": 6})
+        {"name": "lonely", "kind": "node", "geo": [49.48, 9.0],
+         "elevation_m": 360.0, "pn_bar": 1.0})
     with pytest.raises(DataContractError, match="isolated"):
         _rebuild(docs)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from conftest import make_api_client
 
-from rtheatflow.api.core import render_markdown
+from rtwaterflow.api.core import render_markdown
 
 
 def test_render_markdown_subset():
@@ -33,15 +33,15 @@ def test_manual_route_serves_the_benutzerhandbuch():
         assert r.headers["content-type"].startswith("text/html")
         body = r.text
         assert "Benutzerhandbuch" in body
-        # the SPEC §3.5 honesty section is part of the deliverable
+        # the honesty section is part of the deliverable
         assert "Grenzen des Modells" in body
-        assert "Temperaturfronten" in body
+        assert "Quasistatisch" in body
         # the three-view teaching table made it through the table renderer
         assert "<table>" in body and "Realität" in body
 
         raw = client.get("/manual", params={"format": "md"})
         assert raw.status_code == 200
         assert raw.headers["content-type"].startswith("text/markdown")
-        assert raw.text.startswith("# rtheatflow — Benutzerhandbuch")
+        assert raw.text.startswith("# rtwaterflow — Benutzerhandbuch")
 
         assert client.get("/manual", params={"format": "pdf"}).status_code == 422

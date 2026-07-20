@@ -1,0 +1,6 @@
+{
+  "consumers": [
+    {"node": "j4", "name": "Abnehmer Talrand", "mdot_kg_per_s": 0.277},
+    {"node": "j3", "name": "Abnehmer Hangfuss", "mdot_kg_per_s": 0.139}
+  ]
+}

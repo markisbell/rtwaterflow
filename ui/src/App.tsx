@@ -5,11 +5,11 @@ import type {
   ApplyResponse, ExportStatus, RecordingInfo, RecordingStatus, ScenarioInfo,
   Topology,
 } from "./types";
-import LiveHeatFlow from "./views/LiveHeatFlow";
+import LiveWaterFlow from "./views/LiveWaterFlow";
 import NetzStudio from "./views/NetzStudio";
 import { fmt } from "./scales";
 
-export type MapLayer = "supply" | "return" | "velocity" | "dp";
+export type MapLayer = "pressure" | "velocity";
 export type Tab = "live" | "studio";
 
 // The Live view's display settings, lifted here so the menu bar (Ansicht),
@@ -22,7 +22,7 @@ export interface LiveView {
 export default function App() {
   const { t, i18n } = useTranslation();
   const [tab, setTab] = useState<Tab>("live");
-  const [live, setLive] = useState<LiveView>({ layer: "supply", viewMode: "truth" });
+  const [live, setLive] = useState<LiveView>({ layer: "pressure", viewMode: "truth" });
   const patchLive = (p: Partial<LiveView>) => setLive((v) => ({ ...v, ...p }));
   const [topo, setTopo] = useState<Topology | null>(null);
   const [topoErr, setTopoErr] = useState<string | null>(null);
@@ -53,7 +53,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="brand">rtheatflow</span>
+        <span className="brand">rtwaterflow</span>
         <MenuBar live={live} onLive={patchLive} tab={tab} onTab={setTab}
                  onApplied={onApplied} />
         <div className="active-chip">
@@ -90,8 +90,8 @@ export default function App() {
         )}
         {!topoErr && !topo && <div className="spinner">{t("live.loadingNet")}</div>}
         {topo && tab === "live" && (
-          <LiveHeatFlow key={liveKey} topo={topo} view={live}
-                        onView={patchLive} onTopoChange={reloadTopo} />
+          <LiveWaterFlow key={liveKey} topo={topo} view={live}
+                         onView={patchLive} onTopoChange={reloadTopo} />
         )}
         {tab === "studio" && (
           <NetzStudio selected={studioSel} onSelect={setStudioSel}
@@ -162,7 +162,7 @@ function MenuBar({ live, onLive, tab, onTab, onApplied }: {
       .then(() => api.scenarios().then((r) => setScenarios(r.scenarios)))
       .catch((e) => window.alert(String(e)));
 
-  const LAYERS: MapLayer[] = ["supply", "return", "velocity", "dp"];
+  const LAYERS: MapLayer[] = ["pressure", "velocity"];
 
   return (
     <nav className="mbar">
@@ -212,7 +212,7 @@ function MenuBar({ live, onLive, tab, onTab, onApplied }: {
         <a className="mi" href="/api/docs" target="_blank" rel="noreferrer">
           📖 {t("mbar.apiDocs")}
         </a>
-        <a className="mi" href="https://github.com/markisbell/rtheatflow"
+        <a className="mi" href="https://github.com/markisbell/rtwaterflow"
            target="_blank" rel="noreferrer">
           {t("mbar.source")}
         </a>

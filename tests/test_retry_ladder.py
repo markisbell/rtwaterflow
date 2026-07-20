@@ -1,40 +1,57 @@
-"""Retry ladder (SPEC §3.3) — semantics + the validated hard case.
+"""Retry ladder — hydraulic tier semantics + never-500 discipline.
 
-``schutterwald_heat(70, treturn_degC=45)``: tier 1 (undamped) fails, tier 2
-(``alpha=0.5``) converges (SPEC Appendix B item 2, validated 2026-07-15).
+Water hydraulics converge far more readily than the fork parent's thermal
+solves, so the ladder shrank to 3 tiers: colebrook (n iter) → colebrook
+(3n) → nikuradse fallback reported as "degraded" (upstream issue #803 biases
+low-Re friction — the vocabulary ok|degraded|failed survives).
 """
 from __future__ import annotations
 
-import pytest
-from pandapipes.networks import schutterwald_heat
-
-from rtheatflow.simulator import SolveOutcome, retry_attempts, solve_with_retry
+from rtwaterflow.simulator import SolveOutcome, retry_attempts, solve_with_retry
 
 
 def test_ladder_tiers_and_solver_iter_semantics():
-    """RTHEATFLOW_SOLVER_ITER sets base iter of tiers 1/2/4; tier 3 uses 2x."""
+    """RTWATERFLOW_SOLVER_ITER sets base iter of tier 1; tiers 2/3 use 3x."""
     tiers = retry_attempts(50)
-    assert [t["mode"] for t in tiers] == [
-        "bidirectional", "bidirectional", "bidirectional", "sequential"]
-    assert [t["iter"] for t in tiers] == [50, 50, 100, 50]
-    assert "alpha" not in tiers[0]
-    assert tiers[1]["alpha"] == 0.5
-    assert tiers[2]["alpha"] == 0.2
-    # never nonlinear_method="automatic" in bidirectional (ValueError in 0.14)
-    assert all("nonlinear_method" not in t for t in tiers)
+    assert [t["mode"] for t in tiers] == ["hydraulics"] * 3
+    assert [t["iter"] for t in tiers] == [50, 150, 150]
+    assert [t["friction_model"] for t in tiers] == [
+        "colebrook", "colebrook", "nikuradse"]
+    # nikuradse must never be the primary model (issue #803)
+    assert tiers[0]["friction_model"] == "colebrook"
 
 
-def test_hard_case_tier2_converges():
-    net = schutterwald_heat(tflow_degC=70, treturn_degC=45)
+def test_hillside_tier1(hillside_inputs):
+    from rtwaterflow.network_builder import build_network
+    net, _ = build_network(hillside_inputs)
     outcome = solve_with_retry(net, iter_base=100)
     assert isinstance(outcome, SolveOutcome)
     assert outcome.converged is True
-    assert outcome.status == "ok"          # bidirectional tier, not degraded
-    assert outcome.tier == 2               # alpha=0.5 catches it
+    assert outcome.status == "ok"
+    assert outcome.tier == 1
     assert net.converged
 
 
-def test_easy_case_tier1():
-    net = schutterwald_heat()
-    outcome = solve_with_retry(net, iter_base=100)
-    assert outcome.converged and outcome.tier == 1 and outcome.status == "ok"
+def test_nikuradse_tier_reports_degraded(hillside_inputs, monkeypatch):
+    """When the colebrook tiers fail, the nikuradse fallback still converges
+    but the outcome is honestly 'degraded' (friction bias, issue #803)."""
+    import rtwaterflow.simulator as sim_module
+    from rtwaterflow.network_builder import build_network
+
+    net, _ = build_network(hillside_inputs)
+    real_pipeflow = sim_module.pipeflow
+    calls = {"n": 0}
+
+    def flaky(net_, **kwargs):
+        calls["n"] += 1
+        if kwargs.get("friction_model") == "colebrook":
+            from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
+            raise PipeflowNotConverged("poisoned colebrook tier")
+        return real_pipeflow(net_, **kwargs)
+
+    monkeypatch.setattr(sim_module, "pipeflow", flaky)
+    outcome = sim_module.solve_with_retry(net, iter_base=50)
+    assert outcome.converged is True
+    assert outcome.status == "degraded"
+    assert outcome.tier == 3
+    assert "nikuradse" in (outcome.error or "")

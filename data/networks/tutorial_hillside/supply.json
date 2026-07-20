@@ -1,0 +1,5 @@
+{
+  "supplies": [
+    {"node": "j5", "name": "Hochbehälter", "kind": "ext_grid", "p_bar": 0.5}
+  ]
+}

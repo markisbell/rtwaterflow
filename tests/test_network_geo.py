@@ -1,7 +1,6 @@
 """Geo-placement regression: every catalog network must render on land, in
 its documented region — no network may silently drift into a lake/ocean
-again (as the first Verbier/DESTEST anchors did: Lake Geneva / Lake
-Constance, fixed 2026-07-17).
+(a real bug class in the fork parent, fixed 2026-07-17 there).
 
 Every network in data/network_library.json MUST have an expected bbox here;
 a new catalog entry without one fails loudly with instructions.
@@ -15,13 +14,9 @@ REPO = Path(__file__).resolve().parents[1]
 
 # id -> (lat_min, lat_max, lon_min, lon_max) — generous but region-true
 EXPECTED_BBOX = {
-    "appendix_a": (47.90, 48.10, 7.70, 7.95),     # Breisgau region (teaching fixture)
-    "demo_dorf": (48.95, 49.05, 8.35, 8.45),      # Karlsruhe region
-    "schutterwald": (48.44, 48.48, 7.86, 7.91),   # the real town (Ortenau)
-    "destest_8": (49.07, 49.10, 8.42, 8.44),      # synthetic on-land anchor NE of demo region
-    "destest_16": (49.07, 49.10, 8.42, 8.44),
-    "destest_32": (49.07, 49.10, 8.42, 8.44),
-    "verbier": (46.04, 46.15, 7.16, 7.29),        # centroid over Verbier village (synthetic placement)
+    # Odenwald hillside near Eberbach: hilly terrain matching the fixture's
+    # 346-400 m elevations
+    "tutorial_hillside": (49.40, 49.52, 8.90, 9.06),
 }
 
 

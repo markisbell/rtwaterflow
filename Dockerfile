@@ -3,7 +3,7 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app/src \
-    RTHEATFLOW_HOST=0.0.0.0
+    RTWATERFLOW_HOST=0.0.0.0
 
 WORKDIR /app
 
@@ -26,4 +26,4 @@ COPY docs/ ./docs/
 COPY data/ ./data/
 
 EXPOSE 8000
-CMD ["python", "-m", "rtheatflow.main"]
+CMD ["python", "-m", "rtwaterflow.main"]

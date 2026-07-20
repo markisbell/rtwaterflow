@@ -1,3 +1,9 @@
+> **STALE — fork-parent document.** This file describes **rtheatflow**, the
+> district-heating fork parent of rtwaterflow. The water platform (M0+) is
+> governed by `../IMPLEMENTATION_ROADMAP.md` and `../TECHNICAL_FOUNDATIONS.md`.
+> Retained for platform-architecture reference (engine/StateStore/retry-ladder/
+> recorder conventions still describe the shared platform core); every thermal
+> section (heating curves, supply/return pairs, transient mode) does NOT apply.
 # rtheatflow — Build Specification for a Coding Agent
 
 **Deliverable:** A real-time simulation environment for thermal district heating networks ("Wärmenetze"), built on **pandapipes** as the simulation core, structurally cloned from **rtpowerflow/netzsim** (same architecture, UI concept, and feature set, translated from electricity to heat).

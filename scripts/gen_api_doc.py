@@ -15,28 +15,28 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from rtheatflow.api import create_app  # noqa: E402
-from rtheatflow.api.runtime import API_VERSION  # noqa: E402
+from rtwaterflow.api import create_app  # noqa: E402
+from rtwaterflow.api.runtime import API_VERSION  # noqa: E402
 
 OUT = REPO_ROOT / "docs" / "API.md"
 
-HEADER = f"""# rtheatflow API reference
+HEADER = f"""# rtwaterflow API reference
 
 > **Generated** by `scripts/gen_api_doc.py` — do not edit by hand.
 > API version **{API_VERSION}** · interactive docs at `/docs` (Swagger) when the
-> backend runs · default bind `127.0.0.1:8001` (sibling scheme: netzsim owns 8000), no auth (teaching tool).
+> backend runs · default bind `127.0.0.1:8002` (sibling scheme: rtheatflow owns 8001, netzsim 8000), no auth (teaching tool).
 
-The single wire format is the projected `StepResult` (SPEC §6): `/state`,
+The single wire format is the projected hydraulic `StepResult`: `/state`,
 `/history` items and every `WS /ws` message share one `asdict()` + projection
-path. In strict mode (`RTHEATFLOW_EXPOSE_GROUND_TRUTH=false`) the
+path. In strict mode (`RTWATERFLOW_EXPOSE_GROUND_TRUTH=false`) the
 ground-truth keys (`junctions`, `pipes`, `consumers`, `summary`) are stripped
 and the free-text `error` detail is blanked; `measurements` /
 `observed_summary` (the operator view) always remain.
 
-**Error-code conventions** (SPEC §7): `400` validation/import rejection ·
+**Error-code conventions**: `400` validation/import rejection ·
 `404` missing resource or `/state` before the first solve · `409` conflicts
-(second pressure slack, slack removal, export running) · `422` semantic
-limits (weather override out of range) · `500` internal failures only —
+(last-consumer removal, recording busy, export running) · `422` semantic
+limits · `500` internal failures only —
 **solver non-convergence is data (`converged=false` frames), never a 500.**
 """
 

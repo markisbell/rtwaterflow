@@ -1,103 +1,94 @@
-"""Known-answer test (SPEC §11, §12 M1 acceptance).
+"""Known-answer test — the hillside elevation fixture through the full
+platform path (loader → builder → simulator → wire payload).
 
-The Appendix A 3-consumer loop, expressed in the five-file contract and built
-through the platform's own loader/builder/simulator, must reproduce the
-runtime-verified reference values. Pinned values re-derived on this machine
-2026-07-15 (pandapipes 0.14.0, pandapower 3.3.3, numpy 2.4.6, numba 0.66) —
-they match SPEC §11 exactly. Tolerances ~0.5 %; energy balance ≤ 1 %.
+Pinned values re-derived on this machine 2026-07-20 (pandapipes 0.14.0,
+friction_model="colebrook"); the detailed per-junction pins live in
+``test_tutorial_hillside.py`` — this file pins the PLATFORM behaviors around
+them (wire shape, warm start, single-layer conventions).
 """
 from __future__ import annotations
 
 import pytest
 
-from rtheatflow.simulator import Simulator
+from rtwaterflow.simulator import Simulator
 
 from conftest import make_settings
 
-REL = 0.005  # ~0.5 % relative tolerance (SPEC §11)
+REL = 0.005  # ~0.5 % relative tolerance
 
 
 @pytest.fixture(scope="module")
-def result_and_sim(appendix_a_inputs):
-    sim = Simulator(appendix_a_inputs, make_settings())
+def result_and_sim(hillside_inputs):
+    sim = Simulator(hillside_inputs, make_settings())
     result = sim.run_step(0, 0)
     return result, sim
 
 
-def test_converges_bidirectional_tier1(result_and_sim):
+def test_converges_tier1(result_and_sim):
     result, _ = result_and_sim
     assert result.converged is True
     assert result.solver_status == "ok"
     assert result.error is None
 
 
-def test_consumer_setpoints(result_and_sim):
+def test_sink_setpoints(result_and_sim):
     _, sim = result_and_sim
-    hc = sim.net.res_heat_consumer
-    # A: qext 80 kW + treturn 328.15 K -> mdot solved
-    assert hc.mdot_from_kg_per_s.iloc[0] == pytest.approx(0.6744, rel=REL)
-    assert hc.t_outlet_k.iloc[0] == pytest.approx(328.150, abs=1e-3)  # exact
-    # B: qext 50 kW + deltat 30 K
-    assert hc.deltat_k.iloc[1] == pytest.approx(30.0, abs=1e-3)       # exact
-    assert hc.mdot_from_kg_per_s.iloc[1] == pytest.approx(0.3978, rel=REL)
-    # C: qext 30 kW + mdot 0.25 kg/s
-    assert hc.mdot_from_kg_per_s.iloc[2] == pytest.approx(0.25, abs=1e-6)
-
-
-def test_plant_and_network_state(result_and_sim):
-    _, sim = result_and_sim
-    net = sim.net
-    rc = net.res_circ_pump_pressure.iloc[0]
-    assert abs(rc.mdot_from_kg_per_s) == pytest.approx(1.3221, rel=REL)
-    assert rc.t_from_k == pytest.approx(324.355, rel=REL)   # plant return
-    assert rc.t_outlet_k == pytest.approx(358.150, abs=1e-3)  # slack setpoint
-    end_supply = sim.index.junction_supply["n3"]
-    assert net.res_junction.t_k.loc[end_supply] == pytest.approx(351.837, rel=REL)
-
-
-def test_derived_quantities_and_balance(result_and_sim):
-    result, sim = result_and_sim
-    s = result.summary
-    # direction-aware pipe losses (SPEC §3.6)
-    assert s["q_loss_kw"] == pytest.approx(27.258, rel=REL)
-    # platform feed-in = mdot*cp*dT — NOT the raw enthalpy-form column
-    assert s["q_feed_kw"] == pytest.approx(187.182, rel=REL)
-    raw_qext_kw = sim.net.res_circ_pump_pressure.qext_w.iloc[0] / 1000.0
-    assert raw_qext_kw == pytest.approx(195.965, rel=REL)  # pin the trap
-    assert s["q_feed_kw"] < raw_qext_kw                     # never mix the two
-    assert s["q_demand_kw"] == pytest.approx(160.0, rel=REL)
-    # energy balance <= 1 % of feed-in (M1 acceptance)
-    assert abs(s["balance_err_kw"]) / s["q_feed_kw"] <= 0.01
-    # worst point: end-of-line consumer C
-    assert s["worst_consumer"] == "consumer C"
-    assert 0 < s["dp_worst_bar"] < 2.0
-    assert s["pump_el_kw"] > 0
-    assert s["loss_pct"] == pytest.approx(14.56, rel=0.01)
+    rs = sim.net.res_sink
+    assert rs.mdot_kg_per_s.iloc[0] == pytest.approx(0.277, abs=1e-9)
+    assert rs.mdot_kg_per_s.iloc[1] == pytest.approx(0.139, abs=1e-9)
+    # ext_grid supplies the sum (withdrawal reported negative by pandapipes)
+    eg = sim.net.res_ext_grid.mdot_kg_per_s.iloc[0]
+    assert abs(eg) == pytest.approx(0.416, rel=REL)
 
 
 def test_wire_payload_shape(result_and_sim):
     result, _ = result_and_sim
-    assert len(result.junctions) == 8      # 4 trench nodes x supply/return
-    assert len(result.pipes) == 6          # 3 trenches x supply/return
-    assert len(result.consumers) == 3
+    # SINGLE layer: one junction per node, one pipe per entry — no x2
+    # supply/return doubling (the fork parent's expansion is gone)
+    assert len(result.junctions) == 5
+    assert len(result.pipes) == 4
+    assert len(result.consumers) == 2
     assert len(result.producers) == 1
-    # degC on the wire (SPEC §6): plant flow junction at 85 degC
-    assert result.junctions[0]["t_c"] == pytest.approx(85.0, abs=0.01)
-    sides = {p["side"] for p in result.pipes}
-    assert sides == {"s", "r"}
-    # sanity (SPEC §3.6): no pipe reports significantly negative loss
-    assert all(p["q_loss_kw"] > -1e-6 for p in result.pipes)
-    assert result.weather == {"t_amb_c": 0.0, "t_ground_c": 10.0,
-                              "override": False}
+    assert result.producers[0]["kind"] == "slack"
+    assert result.producers[0]["p_bar"] == pytest.approx(0.5)
+    # no thermal keys anywhere on the hydraulic wire
+    for j in result.junctions:
+        assert set(j) == {"id", "name", "p_bar"}
+    for p in result.pipes:
+        assert set(p) == {"id", "trench", "mdot_kg_per_s", "v_m_per_s",
+                          "dp_bar"}
+        assert p["trench"] == p["id"]  # single layer: trench id == pipe id
+    for c in result.consumers:
+        assert set(c) == {"id", "name", "node", "kind",
+                          "mdot_demand_kg_per_s", "mdot_kg_per_s", "p_bar"}
     assert result.time_of_day == "00:00"
+    # velocities are tiny on the tutorial net (max ~0.024 m/s)
+    assert all(abs(p["v_m_per_s"]) < 0.05 for p in result.pipes)
+
+
+def test_flow_direction_downhill(result_and_sim):
+    """Pipe j1->j5 carries the full feed AGAINST its from->to orientation
+    (the source sits at j5): mdot is negative — the tutorial's signature."""
+    result, _ = result_and_sim
+    feed_pipe = result.pipes[3]  # pipes.json order: j1->j5 is entry 4
+    assert feed_pipe["mdot_kg_per_s"] == pytest.approx(-0.416, rel=REL)
 
 
 def test_warm_start_second_step(result_and_sim):
-    """Platform warm start (SPEC §3.4): converged results become the next
-    init; the second step must converge at tier 1 and reproduce the state."""
+    """Platform warm start (pn_bar only): the second step must converge at
+    tier 1 and reproduce the state exactly (constant demand)."""
     result, sim = result_and_sim
     res2 = sim.run_step(1, 0)
     assert res2.converged and res2.solver_status == "ok"
-    assert res2.summary["q_feed_kw"] == pytest.approx(
-        result.summary["q_feed_kw"], rel=1e-6)
+    assert res2.summary["p_min_bar"] == pytest.approx(
+        result.summary["p_min_bar"], rel=1e-6)
     assert res2.time_of_day == "00:01"
+
+
+def test_reset_initialization_is_pn_bar_only(result_and_sim):
+    """After failures/swaps the init reset restores BUILD-TIME pressures;
+    there is no thermal state to reset in water mode."""
+    _, sim = result_and_sim
+    sim._reset_initialization()
+    assert (sim.net.junction["pn_bar"].to_numpy()
+            == sim.index.init_pn_bar).all()

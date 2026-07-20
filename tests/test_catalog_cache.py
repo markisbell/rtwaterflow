@@ -15,9 +15,9 @@ import json
 import shutil
 from pathlib import Path
 
-from conftest import APPENDIX_A_DIR, make_api_client
+from conftest import HILLSIDE_DIR, make_api_client
 
-from rtheatflow.network_catalog import NetworkCatalog
+from rtwaterflow.network_catalog import NetworkCatalog
 
 
 def _shift_geo(directory: Path, dlat: float) -> None:
@@ -32,14 +32,13 @@ def _shift_geo(directory: Path, dlat: float) -> None:
 def _scale_demand(directory: Path, factor: float) -> None:
     f = directory / "consumers.json"
     doc = json.loads(f.read_text(encoding="utf-8"))
-    doc["consumers"][0]["q_sh_w"] = [
-        w * factor for w in doc["consumers"][0]["q_sh_w"]]
+    doc["consumers"][0]["mdot_kg_per_s"] *= factor
     f.write_text(json.dumps(doc, indent=1), encoding="utf-8")
 
 
 def test_get_inputs_rereads_changed_files_but_keeps_cache_otherwise(tmp_path):
     net = tmp_path / "appendix_a"
-    shutil.copytree(APPENDIX_A_DIR, net)
+    shutil.copytree(HILLSIDE_DIR, net)
     cat = NetworkCatalog(networks_dir=tmp_path)   # manifest-less dir scan
 
     first = cat.get_inputs("appendix_a")
@@ -56,11 +55,11 @@ def test_get_inputs_rereads_changed_files_but_keeps_cache_otherwise(tmp_path):
     assert cat.get_inputs("appendix_a") is fresh          # re-cached
 
     # a demand change in another contract file invalidates too
-    q0 = fresh.consumers.consumers[0].q_sh_w[0]
+    q0 = fresh.consumers.consumers[0].mdot_kg_per_s
     _scale_demand(net, 2.0)
     doubled = cat.get_inputs("appendix_a")
     assert doubled is not fresh
-    assert doubled.consumers.consumers[0].q_sh_w[0] == 2.0 * q0
+    assert doubled.consumers.consumers[0].mdot_kg_per_s == 2.0 * q0
 
     # refresh=True re-reads even without any on-disk change (the apply path)
     forced = cat.get_inputs("appendix_a", refresh=True)
@@ -72,7 +71,7 @@ def test_config_apply_reflects_disk_changes(tmp_path):
     ``/network`` topology must carry the new coordinates (no restart)."""
     nets = tmp_path / "networks"
     nets.mkdir()
-    shutil.copytree(APPENDIX_A_DIR, nets / "appendix_a")
+    shutil.copytree(HILLSIDE_DIR, nets / "appendix_a")
 
     with make_api_client(
             data_dir=tmp_path,                       # catalog dir-scan root
@@ -82,7 +81,7 @@ def test_config_apply_reflects_disk_changes(tmp_path):
         r = client.post("/config/apply", json={"network_id": "appendix_a"})
         assert r.status_code == 200
         nodes = {n["name"]: n for n in r.json()["network"]["nodes"]}
-        lat0 = nodes["n1"]["geo"][0]
+        lat0 = nodes["j1"]["geo"][0]
 
         _shift_geo(nets / "appendix_a", 0.5)         # regenerate on disk
 
@@ -93,10 +92,10 @@ def test_config_apply_reflects_disk_changes(tmp_path):
         r2 = client.post("/config/apply", json={"network_id": "appendix_a"})
         assert r2.status_code == 200
         nodes2 = {n["name"]: n for n in r2.json()["network"]["nodes"]}
-        assert nodes2["n1"]["geo"][0] == lat0 + 0.5   # the bug served lat0
+        assert nodes2["j1"]["geo"][0] == lat0 + 0.5   # the bug served lat0
 
         # GET /network (rebuilt from the running sim) agrees
         g = client.get("/network")
         assert g.status_code == 200
         nodes3 = {n["name"]: n for n in g.json()["nodes"]}
-        assert nodes3["n1"]["geo"][0] == lat0 + 0.5
+        assert nodes3["j1"]["geo"][0] == lat0 + 0.5

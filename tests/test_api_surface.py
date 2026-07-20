@@ -11,35 +11,30 @@ import importlib.util
 
 from conftest import REPO_ROOT, make_settings
 
-from rtheatflow.api import create_app
-from rtheatflow.api.runtime import API_VERSION
+from rtwaterflow.api import create_app
+from rtwaterflow.api.runtime import API_VERSION
 
 # ---------------------------------------------------------------------------
-# THE M7 SURFACE. Deliberately exhaustive and alphabetical — change the API,
-# change this list, consciously. (SPEC §7; per-element /profiles sweeps are
-# the one §7 row deliberately not shipped — documented in CLAUDE.md M7.)
+# THE M0 SURFACE (44 routes). Deliberately exhaustive and alphabetical —
+# change the API, change this list, consciously. The fork parent's thermal
+# routes (weather, heatingcurve, dpcontrol, storage, bypass, loadgen,
+# producer CRUD) were removed in M0; water asset routes return in M2+.
 # ---------------------------------------------------------------------------
 EXPECTED = {
     ("DELETE", "/consumer/{consumer_id}"),
     ("DELETE", "/measurements/consumer/{consumer_id}"),
     ("DELETE", "/measurements/node/{node_id}"),
-    ("DELETE", "/producer/{producer_id}"),
     ("DELETE", "/recordings/{rid}"),
     ("DELETE", "/scenarios/{sid}"),
-    ("DELETE", "/storage/{storage_id}"),
-    ("DELETE", "/weather/override"),
     ("GET", "/"),
     ("GET", "/export"),
     ("GET", "/recording"),
     ("GET", "/recordings"),
     ("GET", "/recordings/{rid}/download"),
     ("GET", "/config/active"),
-    ("GET", "/dpcontrol"),
     ("GET", "/estimation/config"),
     ("GET", "/health"),
-    ("GET", "/heatingcurve"),
     ("GET", "/history"),
-    ("GET", "/loadgen/archetypes"),
     ("GET", "/manual"),
     ("GET", "/measurements"),
     ("GET", "/network"),
@@ -49,9 +44,6 @@ EXPECTED = {
     ("GET", "/scenarios"),
     ("GET", "/state"),
     ("GET", "/status"),
-    ("GET", "/storages"),
-    ("GET", "/weather"),
-    ("POST", "/bypass"),
     ("POST", "/config/apply"),
     ("POST", "/consumer"),
     ("POST", "/control/interval"),
@@ -60,26 +52,18 @@ EXPECTED = {
     ("POST", "/control/seek"),
     ("POST", "/control/seekday"),
     ("POST", "/control/start"),
-    ("POST", "/dpcontrol"),
     ("POST", "/estimation/config"),
     ("POST", "/export/cancel"),
     ("POST", "/export/days"),
-    ("POST", "/heatingcurve"),
-    ("POST", "/loadgen/assign"),
     ("POST", "/measurements/consumer/{consumer_id}"),
     ("POST", "/measurements/mode"),
     ("POST", "/measurements/node/{node_id}"),
     ("POST", "/measurements/preset"),
     ("POST", "/networks/import"),
-    ("POST", "/producer"),
-    ("POST", "/producer/{producer_id}/config"),
     ("POST", "/recording/start"),
     ("POST", "/recording/stop"),
     ("POST", "/scenarios"),
     ("POST", "/scenarios/{sid}/load"),
-    ("POST", "/storage"),
-    ("POST", "/storage/{storage_id}/config"),
-    ("PUT", "/weather/override"),
     ("WS", "/ws"),
 }
 
@@ -116,7 +100,7 @@ def test_route_inventory_is_pinned():
 
 
 def test_api_version_reported():
-    assert API_VERSION == "0.7.0"
+    assert API_VERSION == "0.1.0"
     app = create_app(make_settings())
     assert app.version == API_VERSION
 

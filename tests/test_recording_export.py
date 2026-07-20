@@ -1,4 +1,4 @@
-"""M6 recording & bulk export (SPEC §4.6, §6, §7, §12 M6 acceptance).
+"""Recording & bulk export.
 
 The heart of this file is the **live-vs-export byte-compatibility test**:
 record a full (shortened) day live through the publish path, then bulk-export
@@ -12,7 +12,7 @@ comparison):
   (machine timing) — physics of the run, not of the network.
 * ``metadata.json`` keys ``id``, ``started``, ``ended``, ``files`` and the
   exporter's ``export`` block (the pack's own bookkeeping). The recipe
-  fields (network, measurements, controller config, ...) must match.
+  fields (network, measurements, ...) must match.
 
 Everything else — every physics/measurement column, row order, ``_r()``
 rounding — must be byte-identical. This works because
@@ -28,18 +28,15 @@ import io
 import json
 import time
 import zipfile
-from pathlib import Path
 
 import pytest
-from conftest import APPENDIX_A_DIR, REPO_ROOT, make_api_client, make_settings, wait_for
+from conftest import HILLSIDE_DIR, make_api_client, make_settings, wait_for
 
-from rtheatflow.data_loader import load_network
-from rtheatflow.exporter import BulkExporter
-from rtheatflow.recorder import Recorder
-from rtheatflow.simulator import Simulator, StepResult
-from rtheatflow.state import StateStore
-
-DEMO_DORF_DIR = REPO_ROOT / "data" / "networks" / "demo_dorf"
+from rtwaterflow.data_loader import load_network
+from rtwaterflow.exporter import BulkExporter
+from rtwaterflow.recorder import Recorder
+from rtwaterflow.simulator import Simulator, StepResult
+from rtwaterflow.state import StateStore
 
 #: shortened day for the replay tests — a full day in ~25 solves
 SPD = 24
@@ -70,17 +67,11 @@ def _publish_day(sim: Simulator, store: StateStore, day: int = 0) -> None:
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("network_dir,dp_mode", [
-    (APPENDIX_A_DIR, "controlled"),   # Δp controller actively moves the pump
-    (DEMO_DORF_DIR, None),            # heating curve follows the weather day
-], ids=["appendix_a_dp_controlled", "demo_dorf"])
-def test_live_vs_export_byte_compatible(tmp_path, network_dir, dp_mode):
-    """SPEC §12 M6 acceptance: live recording and offline bulk export of the
-    same day are byte-identical (modulo the documented volatile fields)."""
+def test_live_vs_export_byte_compatible(tmp_path):
+    """Live recording and offline bulk export of the same day are
+    byte-identical (modulo the documented volatile fields)."""
     settings = make_settings(steps_per_day=SPD, recordings_dir=tmp_path)
-    sim = Simulator(load_network(network_dir), settings)
-    if dp_mode:
-        sim.dp_control.mode = dp_mode
+    sim = Simulator(load_network(HILLSIDE_DIR), settings)
     store = StateStore(settings)
     recorder = Recorder(tmp_path)
     store.sink = lambda r: recorder.record(store.frame(r))
@@ -93,7 +84,7 @@ def test_live_vs_export_byte_compatible(tmp_path, network_dir, dp_mode):
     recorder.stop()
 
     # export half: deep-copy the now-drifted simulator (warm start advanced,
-    # Δp controller moved the pump, measurement windows filled) and replay
+    # measurement windows filled) and replay
     exporter = BulkExporter(tmp_path)
     sim_copy = copy.deepcopy(sim)
     export_id = exporter.start(sim_copy, dict(meta), [0], name="export")["id"]
@@ -126,43 +117,36 @@ def test_live_vs_export_byte_compatible(tmp_path, network_dir, dp_mode):
 
 
 def test_export_runs_offline_with_fresh_state(tmp_path):
-    """prepare_replay resets run-state but keeps configuration: storages to
-    SoC 0, controlled pump to its file lift, windows fresh — while dp mode,
-    setpoint and weather override survive (they are the recipe)."""
+    """prepare_replay resets run-state but keeps configuration: pn_bar back
+    to build-time init, windows fresh, last payload cleared — while the
+    consumer placement (the recipe) survives."""
     settings = make_settings(steps_per_day=SPD, recordings_dir=tmp_path)
-    sim = Simulator(load_network(APPENDIX_A_DIR), settings)
-    sim.dp_control.mode = "controlled"
-    sim.dp_control.setpoint_bar = 0.8
-    sim.weather.set_override(-7.0)
-    s = sim.add_storage(node=sim.index.consumer_nodes[0],
-                        capacity_kwh=50.0, power_kw=20.0, mode="charge")
-    s.soc_kwh = 33.0
-    sim.set_plift(4.2)
+    sim = Simulator(load_network(HILLSIDE_DIR), settings)
+    sim.add_consumer(node="j1", mdot_kg_per_s=0.05, name="Neubau")
     sim.run_step(0, 0)
+    assert sim._last_payload is not None
 
     BulkExporter.prepare_replay(sim, first_day=0)
-    slack_spec = next(p for p in sim.inputs.producers.producers
-                      if p.kind == "slack")
-    assert float(sim.net.circ_pump_pressure.at[
-        sim.index.slack, "plift_bar"]) == pytest.approx(slack_spec.plift_bar)
-    assert s.soc_kwh == 0.0
+    import numpy as np
+    assert np.allclose(sim.net.junction["pn_bar"].to_numpy(),
+                       sim.index.init_pn_bar)
     assert sim._last_payload is None
-    assert sim.dp_control.mode == "controlled"          # config kept
-    assert sim.dp_control.setpoint_bar == 0.8
-    assert sim.weather.override_t_amb_c == -7.0
-    assert s.mode == "charge"                            # requested mode kept
+    assert sim._blind_spot is None
+    assert sim.est_config.enabled is False
+    # configuration kept: the placed consumer is still there
+    assert "Neubau" in sim.index.consumer_names
 
 
 def _frame(step: int, day: int = 0) -> StepResult:
     return StepResult(step=step, day=day, time_of_day="00:00", converged=True,
                       solver_status="ok", solve_ms=1.0, timestamp=time.time(),
-                      summary={"q_feed_kw": 1.0})
+                      summary={"p_min_bar": 4.0})
 
 
 def test_recorder_never_blocks_the_publish_path(tmp_path):
-    """SPEC §6: the sink never blocks. With a writer that needs 50 ms per
-    frame, publishing 40 frames must still return quasi-instantly (the sink
-    is a queue.put); stop() drains the backlog completely."""
+    """The sink never blocks. With a writer that needs 50 ms per frame,
+    publishing 40 frames must still return quasi-instantly (the sink is a
+    queue.put); stop() drains the backlog completely."""
     settings = make_settings(recordings_dir=tmp_path)
     store = StateStore(settings)
     recorder = Recorder(tmp_path)
@@ -208,7 +192,7 @@ def test_recorder_strict_mode_writes_no_truth(tmp_path):
     CSV exists at all — what never reaches the wire never reaches disk."""
     settings = make_settings(steps_per_day=SPD, recordings_dir=tmp_path,
                              expose_ground_truth=False)
-    sim = Simulator(load_network(APPENDIX_A_DIR), settings)
+    sim = Simulator(load_network(HILLSIDE_DIR), settings)
     store = StateStore(settings)
     recorder = Recorder(tmp_path)
     store.sink = lambda r: recorder.record(store.frame(r))
@@ -266,21 +250,19 @@ def test_recording_api_roundtrip(tmp_path):
 
 
 def test_recording_metadata_recipe(tmp_path):
-    """metadata.json carries the reproducibility recipe (SPEC §4.6/M6):
-    version, network, sensors, controller config, clock, strict flag."""
+    """metadata.json carries the reproducibility recipe: version, network,
+    sensors, estimation policy, clock, strict flag."""
     client = make_api_client(steps_per_day=SPD, recordings_dir=tmp_path)
     with client:
         rid = client.post("/recording/start").json()["id"]
         client.post("/recording/stop")
         meta = json.loads(
             (tmp_path / rid / "metadata.json").read_text("utf-8"))
-    assert meta["rtheatflow_version"] == "0.7.0"
-    assert meta["network"]["network_id"] == "appendix_a"
+    assert meta["rtwaterflow_version"] == "0.1.0"
+    assert meta["network"]["network_id"] == "tutorial_hillside"
     assert meta["measurements"]["preset"] == "all_consumers"
     assert "mode" in meta["measurements"]
-    assert "setpoint_bar" in meta["dp_control"]
-    assert "kind" in meta["plant"]
-    assert meta["estimation"]["enabled"] is True  # M7 policy in the recipe
+    assert meta["estimation"]["enabled"] is False  # M0: stubbed observer
     assert "interval_seconds" in meta["engine"]
     assert meta["expose_ground_truth"] is True
     assert meta["steps_recorded"] == 0
@@ -288,13 +270,14 @@ def test_recording_metadata_recipe(tmp_path):
 
 def test_recording_auto_stops_on_apply_and_scenario_load(tmp_path):
     """A recording documents ONE configuration: network apply and scenario
-    load finish it (M6 scope)."""
+    load finish it."""
     client = make_api_client(steps_per_day=SPD, recordings_dir=tmp_path,
                              scenarios_dir=tmp_path / "scen")
     with client:
         client.post("/recording/start")
         assert client.get("/recording").json()["active"]
-        r = client.post("/config/apply", json={"network_id": "demo_dorf"})
+        r = client.post("/config/apply",
+                        json={"network_id": "tutorial_hillside"})
         assert r.status_code == 200
         assert not client.get("/recording").json()["active"]
 
@@ -349,14 +332,14 @@ def test_export_api_progress_cancel_and_conflicts(tmp_path):
 
 
 def test_record_setting_starts_recording_and_rotates(tmp_path):
-    """RTHEATFLOW_RECORD=true — continuous operation: recording from startup,
+    """RTWATERFLOW_RECORD=true — continuous operation: recording from startup,
     rotated (one pack per configuration) by a network apply."""
     client = make_api_client(steps_per_day=SPD, recordings_dir=tmp_path,
                              record=True)
     with client:
         assert client.get("/recording").json()["active"]
         first = client.get("/recording").json()["id"]
-        client.post("/config/apply", json={"network_id": "demo_dorf"})
+        client.post("/config/apply", json={"network_id": "tutorial_hillside"})
         after = client.get("/recording").json()
         assert after["active"] and after["id"] != first
     # lifespan shutdown finishes the active pack: both carry metadata.json

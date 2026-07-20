@@ -1,10 +1,20 @@
-"""Network catalog + loadgen + scenarios (SPEC §4.5, §4.6, §7; §12 M4
-acceptance 3: scenario save/load round-trip)."""
+"""Network catalog + runtime swap + scenario save/load round-trip."""
 from __future__ import annotations
+
+import json
 
 import pytest
 
-from conftest import REPO_ROOT, make_api_client, wait_for
+from conftest import HILLSIDE_DIR, make_api_client, wait_for
+
+FILES = ("network_structure", "pipes", "consumers", "supply", "environment")
+
+
+def _hillside_bundle(name: str) -> dict:
+    bundle = {n: json.loads(
+        (HILLSIDE_DIR / f"{n}.json").read_text(encoding="utf-8"))
+        for n in FILES}
+    return {"name": name, **bundle}
 
 
 # -- catalog ---------------------------------------------------------------------
@@ -14,115 +24,72 @@ def test_networks_list_and_preview():
         r = client.get("/networks").json()
         assert r["available"] is True
         ids = {n["id"] for n in r["networks"]}
-        assert {"demo_dorf", "appendix_a"} <= ids
-        dorf = next(n for n in r["networks"] if n["id"] == "demo_dorf")
-        assert dorf["character"] == "rural"
-        assert dorf["nodes"] == 15
-        assert dorf["trench_km"] == pytest.approx(0.953, abs=0.01)
+        assert "tutorial_hillside" in ids
+        entry = next(n for n in r["networks"]
+                     if n["id"] == "tutorial_hillside")
+        assert entry["nodes"] == 5
+        assert entry["pipe_km"] == pytest.approx(1.355, abs=0.01)
 
-        p = client.get("/networks/demo_dorf").json()
-        assert p["n_consumers"] == 11
-        assert p["design_load_kw"] == pytest.approx(182, rel=0.05)
-        # honest rural LHD, well below the >=1-1.5 viability rule of thumb —
-        # which is exactly what the NetzStudio marker is there to show
-        assert 0.3 <= p["linear_heat_density_mwh_per_m_a"] <= 1.0
-        assert p["plant"]["heating_curve"] is not None
+        p = client.get("/networks/tutorial_hillside").json()
+        assert p["n_consumers"] == 2
+        assert p["n_pipes"] == 4
+        assert p["demand_kg_per_s"] == pytest.approx(0.416, abs=1e-4)
+        assert p["elevation_min_m"] == 346.0
+        assert p["elevation_max_m"] == 400.0
+        assert p["supply"]["node"] == "j5"
+        assert p["supply"]["p_bar"] == 0.5
 
         assert client.get("/networks/nope").status_code == 404
 
 
-# -- loadgen (SPEC §4.5) -----------------------------------------------------------
+# -- runtime network swap ----------------------------------------------------------
 
-def test_loadgen_archetypes_and_assign_preview():
-    with make_api_client() as client:
-        a = client.get("/loadgen/archetypes").json()
-        assert a["available"] is True
-        assert {x["id"] for x in a["archetypes"]} == {
-            "EFH_ALT_4P", "EFH_SAN_4P", "MFH_ALT_10WE"}
-
-        req = {"network_id": "demo_dorf",
-               "policy": {"seed": 42, "temperature_preset": "4G"}}
-        r1 = client.post("/loadgen/assign", json=req).json()
-        assert len(r1["assignments"]) == 11
-        k = r1["kpis"]
-        assert k["design_load_kw"] > 50
-        assert k["trench_km"] == pytest.approx(0.953, abs=0.01)
-        assert k["linear_heat_density_mwh_per_m_a"] is not None
-        # 4G returns are low-temperature (per-archetype table)
-        assert all(a["treturn_c"] <= 45 for a in r1["assignments"])
-        # load-duration curve: descending, kW
-        d = r1["duration_kw"]
-        assert all(a >= b for a, b in zip(d, d[1:]))
-        assert d[0] == pytest.approx(k["peak_load_kw"], rel=0.05)
-
-        # deterministic given the policy (recipes replay bit-identically)
-        r2 = client.post("/loadgen/assign", json=req).json()
-        assert r1 == r2
-
-        assert client.post("/loadgen/assign", json={
-            "network_id": "nope", "policy": {}}).status_code == 404
-        assert client.post("/loadgen/assign", json={
-            "network_id": "demo_dorf",
-            "policy": {"archetypes": ["NOPE"]}}).status_code == 400
-
-
-# -- runtime network swap (SPEC §3.4) ----------------------------------------------
-
-def test_config_apply_swaps_the_network():
-    with make_api_client(autostart=True) as client:
+def test_config_apply_swaps_the_network(tmp_path):
+    """Swap needs a second loadable network — import one on the fly."""
+    with make_api_client(autostart=True, user_networks_dir=tmp_path,
+                         recordings_dir=tmp_path / "rec") as client:
         wait_for(lambda: client.get("/state").status_code == 200)
-        assert client.get("/config/active").json()["network_id"] == "appendix_a"
+        assert client.get("/config/active").json()[
+            "network_id"] == "tutorial_hillside"
 
-        r = client.post("/config/apply", json={"network_id": "demo_dorf"})
+        imp = client.post("/networks/import",
+                          json=_hillside_bundle("Zweitnetz"))
+        assert imp.status_code == 200
+
+        r = client.post("/config/apply",
+                        json={"network_id": "user_zweitnetz"})
         assert r.status_code == 200
         body = r.json()
-        assert body["status"]["network"]["id"] == "demo_dorf"
+        assert body["status"]["network"]["id"] == "user_zweitnetz"
         assert body["active"]["source"] == "catalog"
-        assert len(body["network"]["nodes"]) == 15
+        assert len(body["network"]["nodes"]) == 5
 
         # the store was reset; the engine keeps running on the new net
-        assert client.get("/status").json()["network"]["id"] == "demo_dorf"
+        assert client.get("/status").json()[
+            "network"]["id"] == "user_zweitnetz"
         frame = wait_for(lambda: (
             (rr := client.get("/state")).status_code == 200
             and rr.json().get("converged") and rr.json()))
-        assert len(frame["consumers"]) == 11
+        assert len(frame["consumers"]) == 2
 
         assert client.post("/config/apply", json={
             "network_id": "nope"}).status_code == 404
 
 
-def test_config_apply_with_loadgen_couples_the_4g_preset():
-    with make_api_client() as client:
-        r = client.post("/config/apply", json={
-            "network_id": "demo_dorf",
-            "loadgen": {"seed": 1, "temperature_preset": "4G"}})
-        assert r.status_code == 200
-        assert r.json()["active"]["loadgen"]["temperature_preset"] == "4G"
-        # the slack got the §4.2 4G curve preset
-        hc = client.get("/heatingcurve").json()
-        assert hc["params"]["t_flow_design_c"] == 70.0
-
-
-# -- scenarios (SPEC §4.6; §12 M4 acceptance 3) -------------------------------------
+# -- scenarios ---------------------------------------------------------------------
 
 def test_scenario_round_trip(tmp_path):
-    """configure (equipment + curve + Δp + override + clock) → save →
-    mutate heavily (incl. a full network swap) → load → restored."""
-    with make_api_client(scenarios_dir=tmp_path) as client:
+    """configure (consumer + sensors + clock) → save → mutate heavily
+    (incl. a full network swap) → load → restored."""
+    with make_api_client(scenarios_dir=tmp_path,
+                         user_networks_dir=tmp_path / "user",
+                         recordings_dir=tmp_path / "rec") as client:
         # --- configure the live setup ---
-        client.post("/heatingcurve", json={"preset": "3G"})
-        client.post("/dpcontrol", json={"mode": "controlled",
-                                        "setpoint_bar": 0.8})
-        client.put("/weather/override", json={"t_amb_c": -5})
-        client.post("/producer", json={
-            "node": "n2", "kind": "heat_exchanger",
-            "qext_w": 20000, "inner_diameter_mm": 50, "name": "Solar"})
-        client.post("/storage", json={
-            "node": "n2", "capacity_kwh": 40, "power_kw": 20,
-            "mode": "charge", "name": "Puffer"})
-        client.post("/bypass", json={"node": "n3", "name": "Endbypass"})
         client.post("/consumer", json={
-            "node": "n1", "q_kw": 15, "treturn_c": 50, "name": "Neubau"})
+            "node": "j1", "mdot_kg_per_s": 0.05, "name": "Neubau"})
+        client.post("/measurements/preset", json={"preset": "clear"})
+        client.post("/measurements/node/j4", json={})
+        client.post("/measurements/mode", json={"mode": "standard"})
         client.post("/control/seek", json={"step": 300})
         client.post("/control/interval", json={"seconds": 5.0})
 
@@ -131,49 +98,40 @@ def test_scenario_round_trip(tmp_path):
         assert r.status_code == 200
         sid = r.json()["id"]
         assert sid == "rt-test"
-        assert r.json()["network_id"] == "appendix_a"
+        assert r.json()["network_id"] == "tutorial_hillside"
         listed = client.get("/scenarios").json()["scenarios"]
         assert any(s["id"] == sid for s in listed)
 
         # --- mutate everything, including a full network swap ---
-        hx_id = next(p["id"] for p in client.get("/producers").json()
-                     if p["kind"] == "heat_exchanger")
-        client.delete(f"/producer/{hx_id}")
-        client.delete("/weather/override")
-        client.post("/heatingcurve", json={"preset": "4G"})
-        client.post("/dpcontrol", json={"mode": "fixed"})
-        client.post("/config/apply", json={"network_id": "demo_dorf"})
-        assert client.get("/status").json()["network"]["id"] == "demo_dorf"
-        assert client.get("/storages").json() == []
+        topo = client.get("/network").json()
+        neubau = next(c for c in topo["consumers"] if c["name"] == "Neubau")
+        client.delete(f"/consumer/{neubau['id']}")
+        client.post("/measurements/preset", json={"preset": "all_consumers"})
+        imp = client.post("/networks/import",
+                          json=_hillside_bundle("Anderes Netz"))
+        assert imp.status_code == 200
+        client.post("/config/apply", json={"network_id": "user_anderes-netz"})
+        assert client.get("/status").json()[
+            "network"]["id"] == "user_anderes-netz"
 
         # --- load the recipe back ---
         r = client.post(f"/scenarios/{sid}/load")
         assert r.status_code == 200
-        assert r.json()["status"]["network"]["id"] == "appendix_a"
+        assert r.json()["status"]["network"]["id"] == "tutorial_hillside"
         assert r.json()["active"]["scenario"] == "RT Test"
 
-        # equipment restored
-        producers = client.get("/producers").json()
-        hx = next(p for p in producers if p["kind"] == "heat_exchanger")
-        assert hx["name"] == "Solar" and hx["qext_w"] == 20000.0
-        stor = client.get("/storages").json()
-        assert len(stor) == 1
-        assert stor[0]["name"] == "Puffer" and stor[0]["mode"] == "charge"
-        assert stor[0]["capacity_kwh"] == 40.0
+        # consumer op restored
         topo = client.get("/network").json()
         names = {c["name"] for c in topo["consumers"]}
-        assert {"Neubau", "Endbypass"} <= names
-        kinds = {c["name"]: c["kind"] for c in topo["consumers"]}
-        assert kinds["Endbypass"] == "bypass"
+        assert "Neubau" in names
 
-        # controller/override/clock restored (incl. the engine clock ±2
-        # ticks: the loaded scenario starts running at 5 s/step)
-        hc = client.get("/heatingcurve").json()
-        assert hc["params"]["t_flow_design_c"] == 110.0
-        dp = client.get("/dpcontrol").json()
-        assert dp["mode"] == "controlled" and dp["setpoint_bar"] == 0.8
-        w = client.get("/weather").json()
-        assert w["override"] is True and w["override_t_amb_c"] == -5.0
+        # sensor placement restored (explicit lists win)
+        m = client.get("/measurements").json()
+        assert m["mode"] == "standard"
+        assert m["node_sensors"] == ["j4"]
+        assert m["consumer_meters"] == []
+
+        # clock restored (±2 ticks: the loaded scenario starts running)
         st = client.get("/status").json()
         assert st["running"] is True
         assert 300 <= st["step"] <= 302
@@ -183,28 +141,3 @@ def test_scenario_round_trip(tmp_path):
         assert client.delete(f"/scenarios/{sid}").status_code == 200
         assert client.delete(f"/scenarios/{sid}").status_code == 404
         assert client.post(f"/scenarios/{sid}/load").status_code == 404
-
-
-def test_reference_scenarios_load():
-    """The two shipped recipes (SPEC §12 M4: reference scenarios) replay."""
-    with make_api_client(
-            scenarios_dir=REPO_ROOT / "data" / "scenarios") as client:
-        listed = client.get("/scenarios").json()["scenarios"]
-        ids = {s["id"] for s in listed}
-        assert {"demo-dorf-3g-winter", "demo-dorf-4g-vergleich"} <= ids
-
-        r = client.post("/scenarios/demo-dorf-3g-winter/load")
-        assert r.status_code == 200
-        assert r.json()["status"]["network"]["id"] == "demo_dorf"
-        assert client.get("/heatingcurve").json()[
-            "params"]["t_flow_design_c"] == 110.0
-        assert client.get("/dpcontrol").json()["mode"] == "controlled"
-
-        r = client.post("/scenarios/demo-dorf-4g-vergleich/load")
-        assert r.status_code == 200
-        assert client.get("/heatingcurve").json()[
-            "params"]["t_flow_design_c"] == 70.0
-        slack = next(p for p in client.get("/producers").json()
-                     if p["kind"] == "slack")
-        assert slack["plant"]["kind"] == "heat_pump"
-        assert slack["plant"]["t_cold_source"] == "t_ground"

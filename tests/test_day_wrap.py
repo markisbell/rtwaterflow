@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import asyncio
 
-from rtheatflow.engine import RealtimeEngine
-from rtheatflow.simulator import Simulator
+from rtwaterflow.engine import RealtimeEngine
+from rtwaterflow.simulator import Simulator
 
 from conftest import make_settings
 
 
-def test_engine_ticks_across_day_boundary(appendix_a_inputs):
+def test_engine_ticks_across_day_boundary(hillside_inputs):
     settings = make_settings(step_interval_seconds=0.01)
 
     async def main():
-        sim = Simulator(appendix_a_inputs, settings)
+        sim = Simulator(hillside_inputs, settings)
         engine = RealtimeEngine(sim, settings=settings)
         engine.seek(settings.steps_per_day - 2)  # 23:58
         await engine.start()
@@ -42,14 +42,14 @@ def test_engine_ticks_across_day_boundary(appendix_a_inputs):
     assert by_key[(1, 0)].time_of_day == "00:00"
     # multi-day profile indexing wraps modulo the horizon (1-day fixture):
     # day 1 reproduces day 0 physics
-    assert by_key[(1, 0)].summary["q_feed_kw"] > 0
+    assert by_key[(1, 0)].summary["p_min_bar"] > 0
 
 
-def test_engine_pause_resume_seek(appendix_a_inputs):
+def test_engine_pause_resume_seek(hillside_inputs):
     settings = make_settings(step_interval_seconds=0.01)
 
     async def main():
-        sim = Simulator(appendix_a_inputs, settings)
+        sim = Simulator(hillside_inputs, settings)
         engine = RealtimeEngine(sim, settings=settings)
         await engine.start()
         for _ in range(400):

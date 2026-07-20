@@ -1,58 +1,45 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { ArchetypeInfo, PlantKind } from "../types";
 
-/** What was right-clicked on the map (SPEC §8 interaction grammar). Every
- *  target sits at a trench node, so placement actions are always offered. */
+/** What was right-clicked on the map. Every target sits at a network node,
+ *  so placement actions are always offered. */
 export interface MenuTarget {
-  kind: "node" | "consumer" | "producer" | "storage";
+  kind: "node" | "consumer" | "producer";
   id: number | string;
   name: string;
   node: string;
   x: number; // viewport coordinates of the click
   y: number;
   // element context for the remove/config labels
-  consumerKind?: "consumer" | "bypass";
-  producerKind?: "slack" | "heat_exchanger" | "pump_mass";
+  consumerKind?: "consumer";
+  producerKind?: "slack";
 }
 
 export type MenuAction =
-  | { type: "addHx" }
-  | { type: "addPump" }
-  | { type: "addStorage" }
-  | { type: "addBypass" }
-  | { type: "addConsumer"; archetype?: string; qKw?: number }
+  | { type: "addConsumer"; mdot?: number }
   | { type: "removeConsumer" }
-  | { type: "removeProducer" }
-  | { type: "removeStorage" }
-  | { type: "storageMode"; mode: "idle" | "charge" | "discharge" }
-  | { type: "plantKind"; kind: PlantKind; tColdSource?: "t_amb" | "t_ground" }
-  // M5 sensor placement (SPEC §7/§8a)
+  // sensor placement
   | { type: "placeMeter" }
   | { type: "removeMeter" }
   | { type: "placeNodeSensor" }
   | { type: "removeNodeSensor" };
 
 /** Context menu on a clicked map element: element-specific actions first
- *  (pin details, remove, storage mode, plant kind), then the placement
- *  items — the node → add producer/storage/bypass/consumer grammar (§8).
- *  Two-page: the consumer archetype picker and the plant-kind picker swap
- *  the page in place. */
+ *  (pin details, meter/sensor, remove), then the placement items. The M2+
+ *  water assets (tanks, pump stations, hydrants) re-grow their pages here. */
 export default function ElementMenu({
-  target, archetypes, onAction, onPin, onClose, metered, nodeSensored,
+  target, onAction, onPin, onClose, metered, nodeSensored,
 }: {
   target: MenuTarget;
-  archetypes: ArchetypeInfo[];
   onAction: (a: MenuAction) => void;
   onPin: () => void;
   onClose: () => void;
-  /** M5: does this consumer already carry a heat meter? */
+  /** does this consumer already carry a water meter? */
   metered?: boolean;
-  /** M5: does this element's node already carry a T/p sensor? */
+  /** does this element's node already carry a pressure sensor? */
   nodeSensored?: boolean;
 }) {
   const { t } = useTranslation();
-  const [page, setPage] = useState<"main" | "consumer" | "plant">("main");
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", esc);
@@ -67,86 +54,32 @@ export default function ElementMenu({
   );
   const act = (a: MenuAction) => () => onAction(a);
 
+  const specific: JSX.Element[] = [
+    item("pin", `📌 ${t("menu.pin")}`, onPin),
+  ];
+  if (target.kind === "consumer") {
+    // water meter (Wasserzähler) at the consumer
+    specific.push(metered
+      ? item("rmM", `📟 ${t("menu.removeMeter")}`,
+             act({ type: "removeMeter" }))
+      : item("addM", `📟 ${t("menu.placeMeter")}`,
+             act({ type: "placeMeter" })));
+    specific.push(item("rmC", `🗑️ ${t("menu.removeConsumer")}`,
+                       act({ type: "removeConsumer" })));
+  } else if (target.kind === "node" || target.kind === "producer") {
+    // pressure sensor at the node
+    specific.push(nodeSensored
+      ? item("rmS", `🌡️ ${t("menu.removeSensor")}`,
+             act({ type: "removeNodeSensor" }))
+      : item("addS", `🌡️ ${t("menu.placeSensor")}`,
+             act({ type: "placeNodeSensor" })));
+  }
   const placement = [
     <div key="hdr-place" className="menu-hdr">{t("menu.placeHdr")}</div>,
-    item("hx", `☀️ ${t("menu.addHx")}`, act({ type: "addHx" })),
-    item("pump", `⚙️ ${t("menu.addPump")}`, act({ type: "addPump" })),
-    item("stor", `🛢️ ${t("menu.addStorage")}`, act({ type: "addStorage" })),
-    item("cons", `🏠 ${t("menu.addConsumer")}…`,
-         () => setPage("consumer"), false),
-    item("byp", `🔀 ${t("menu.addBypass")}`, act({ type: "addBypass" })),
+    item("cons", `🏠 ${t("menu.addConsumer")}`,
+         act({ type: "addConsumer", mdot: 0.05 })),
   ];
-
-  let body: JSX.Element[];
-  if (page === "consumer") {
-    body = [
-      <div key="hdr" className="menu-hdr">{t("menu.consumerHdr")}</div>,
-      ...archetypes.map((a) =>
-        item(a.id, `🏠 ${a.name}`,
-             act({ type: "addConsumer", archetype: a.id }))),
-      item("const", `🏠 ${t("menu.constConsumer")}`,
-           act({ type: "addConsumer", qKw: 20 })),
-      item("back", `← ${t("menu.back")}`, () => setPage("main"), false),
-    ];
-  } else if (page === "plant") {
-    body = [
-      <div key="hdr" className="menu-hdr">{t("menu.plantHdr")}</div>,
-      item("boiler", `🔥 ${t("menu.plantBoiler")}`,
-           act({ type: "plantKind", kind: "boiler" })),
-      item("chp", `⚡ ${t("menu.plantChp")}`,
-           act({ type: "plantKind", kind: "chp" })),
-      item("hpAir", `♨️ ${t("menu.plantHpAir")}`,
-           act({ type: "plantKind", kind: "heat_pump", tColdSource: "t_amb" })),
-      item("hpGround", `♨️ ${t("menu.plantHpGround")}`,
-           act({ type: "plantKind", kind: "heat_pump", tColdSource: "t_ground" })),
-      item("back", `← ${t("menu.back")}`, () => setPage("main"), false),
-    ];
-  } else {
-    const specific: JSX.Element[] = [
-      item("pin", `📌 ${t("menu.pin")}`, onPin),
-    ];
-    if (target.kind === "consumer") {
-      // M5: heat meter (Wärmemengenzähler) at the substation
-      specific.push(metered
-        ? item("rmM", `📟 ${t("menu.removeMeter")}`,
-               act({ type: "removeMeter" }))
-        : item("addM", `📟 ${t("menu.placeMeter")}`,
-               act({ type: "placeMeter" })));
-      specific.push(item(
-        "rmC",
-        `🗑️ ${target.consumerKind === "bypass"
-          ? t("menu.removeBypass") : t("menu.removeConsumer")}`,
-        act({ type: "removeConsumer" })));
-    } else if (target.kind === "node" || target.kind === "producer") {
-      // M5: T/p sensor pair at the trench node (SPEC §8a)
-      specific.push(nodeSensored
-        ? item("rmS", `🌡️ ${t("menu.removeSensor")}`,
-               act({ type: "removeNodeSensor" }))
-        : item("addS", `🌡️ ${t("menu.placeSensor")}`,
-               act({ type: "placeNodeSensor" })));
-    }
-    if (target.kind === "producer") {
-      if (target.producerKind === "slack") {
-        specific.push(item("plant", `🏭 ${t("menu.plantKind")}…`,
-                           () => setPage("plant"), false));
-      } else {
-        specific.push(item("rmP", `🗑️ ${t("menu.removeProducer")}`,
-                           act({ type: "removeProducer" })));
-      }
-    } else if (target.kind === "storage") {
-      specific.push(
-        item("chg", `⚡ ${t("menu.storageCharge")}`,
-             act({ type: "storageMode", mode: "charge" })),
-        item("dis", `🔻 ${t("menu.storageDischarge")}`,
-             act({ type: "storageMode", mode: "discharge" })),
-        item("idle", `⏸ ${t("menu.storageIdle")}`,
-             act({ type: "storageMode", mode: "idle" })),
-        item("rmS", `🗑️ ${t("menu.removeStorage")}`,
-             act({ type: "removeStorage" })),
-      );
-    }
-    body = [...specific, ...placement];
-  }
+  const body = [...specific, ...placement];
 
   return (
     <>

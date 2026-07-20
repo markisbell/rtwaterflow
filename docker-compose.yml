@@ -1,23 +1,23 @@
-# rtheatflow full stack (SPEC §9.3): backend + UI + InfluxDB + collector +
+# rtwaterflow full stack (SPEC §9.3): backend + UI + InfluxDB + collector +
 # Grafana. ⚠️ Every credential/token below is a DEVELOPMENT default (teaching
 # tool, no auth by design) — the same values are wired into the collector env
 # and visualization/grafana/provisioning/datasources/influxdb.yml; change
 # them together if this stack ever leaves a trusted machine.
 services:
-  # --- Realtime district-heating simulation (app 1) ----------------------- #
+  # --- Realtime drinking-water simulation (app 1) ----------------------- #
   backend:
     build: .
     ports:
-      - "8001:8000"   # host 8001: sibling scheme, netzsim compose owns 8000
+      - "8002:8000"   # host 8002: sibling scheme (rtheatflow 8001, netzsim 8000)
     environment:
-      RTHEATFLOW_DATA_DIR: /app/data
+      RTWATERFLOW_DATA_DIR: /app/data
       # inside the container the API must be reachable from the other services
-      RTHEATFLOW_HOST: 0.0.0.0
-      RTHEATFLOW_STEP_INTERVAL_SECONDS: "1.0"
-      RTHEATFLOW_STEPS_PER_DAY: "1440"
-      RTHEATFLOW_AUTOSTART: "true"
-      RTHEATFLOW_LOG_LEVEL: info
-      RTHEATFLOW_CORS_ORIGINS: "*"
+      RTWATERFLOW_HOST: 0.0.0.0
+      RTWATERFLOW_STEP_INTERVAL_SECONDS: "1.0"
+      RTWATERFLOW_STEPS_PER_DAY: "1440"
+      RTWATERFLOW_AUTOSTART: "true"
+      RTWATERFLOW_LOG_LEVEL: info
+      RTWATERFLOW_CORS_ORIGINS: "*"
     volumes:
       # persist recordings/user imports, or mount your own dataset over the
       # bundled one (the image bakes the committed data/ and runs standalone)
@@ -28,7 +28,7 @@ services:
   ui:
     build: ./ui
     ports:
-      - "8081:80"     # host 8081: netzsim compose owns 8080
+      - "8082:80"     # host 8081: netzsim compose owns 8080
     depends_on:
       - backend
     restart: unless-stopped
@@ -37,15 +37,15 @@ services:
   influxdb:
     image: influxdb:2.7
     ports:
-      - "8087:8086"   # host 8087: netzsim compose owns 8086
+      - "8088:8086"   # host 8087: netzsim compose owns 8086
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
       DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: rtheatflow-admin   # dev credentials
-      DOCKER_INFLUXDB_INIT_ORG: rtheatflow
-      DOCKER_INFLUXDB_INIT_BUCKET: heatflow
+      DOCKER_INFLUXDB_INIT_PASSWORD: rtwaterflow-admin   # dev credentials
+      DOCKER_INFLUXDB_INIT_ORG: rtwaterflow
+      DOCKER_INFLUXDB_INIT_BUCKET: waterflow
       DOCKER_INFLUXDB_INIT_RETENTION: 7d
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: rtheatflow-dev-token   # dev token
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: rtwaterflow-dev-token   # dev token
     volumes:
       - influxdb-data:/var/lib/influxdb2
     healthcheck:
@@ -64,11 +64,11 @@ services:
       backend:
         condition: service_started
     environment:
-      RTHEATFLOW_URL: http://backend:8000
+      RTWATERFLOW_URL: http://backend:8000
       INFLUX_URL: http://influxdb:8086
-      INFLUX_TOKEN: rtheatflow-dev-token   # dev token (matches influxdb init)
-      INFLUX_ORG: rtheatflow
-      INFLUX_BUCKET: heatflow
+      INFLUX_TOKEN: rtwaterflow-dev-token   # dev token (matches influxdb init)
+      INFLUX_ORG: rtwaterflow
+      INFLUX_BUCKET: waterflow
       POLL_INTERVAL_SECONDS: "0.5"
     restart: unless-stopped
 
@@ -76,7 +76,7 @@ services:
   grafana:
     image: grafana/grafana:11.1.0
     ports:
-      - "3001:3000"   # host 3001: netzsim compose owns 3000
+      - "3002:3000"   # host 3001: netzsim compose owns 3000
     depends_on:
       influxdb:
         condition: service_healthy

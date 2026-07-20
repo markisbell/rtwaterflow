@@ -1,0 +1,10 @@
+{
+  "name": "Tutorial Hanglage",
+  "junctions": [
+    {"name": "j1", "kind": "node", "geo": [49.4665, 8.9860], "elevation_m": 352.0, "pn_bar": 1.0},
+    {"name": "j2", "kind": "node", "geo": [49.4642, 8.9895], "elevation_m": 358.0, "pn_bar": 1.0},
+    {"name": "j3", "kind": "consumer", "geo": [49.4638, 8.9903], "elevation_m": 361.0, "pn_bar": 1.0},
+    {"name": "j4", "kind": "consumer", "geo": [49.4678, 8.9835], "elevation_m": 346.0, "pn_bar": 1.0},
+    {"name": "j5", "kind": "source", "geo": [49.4630, 8.9820], "elevation_m": 400.0, "pn_bar": 1.0}
+  ]
+}

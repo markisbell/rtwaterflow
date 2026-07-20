@@ -1,6 +1,6 @@
-"""Strict observability mode + non-convergence over the API (SPEC §1, §3.3, §7).
+"""Strict observability mode + non-convergence over the API.
 
-* ``RTHEATFLOW_EXPOSE_GROUND_TRUTH=false``: `/state`, `/history` and WS
+* ``RTWATERFLOW_EXPOSE_GROUND_TRUTH=false``: `/state`, `/history` and WS
   frames carry **no ground-truth keys** (junctions/pipes/consumers/summary)
   and no error detail, but keep ``measurements``/``observed_summary`` — one
   shared projection path, not parallel ones.
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
 
-import rtheatflow.simulator as simulator_module
+import rtwaterflow.simulator as simulator_module
 from conftest import make_api_client, wait_for
 
 TRUTH_KEYS = {"junctions", "pipes", "consumers", "summary"}
@@ -21,13 +21,13 @@ def _assert_strict_frame(frame: dict) -> None:
     assert not (TRUTH_KEYS & set(frame)), (
         f"ground truth leaked in strict mode: {TRUTH_KEYS & set(frame)}")
     assert frame["error"] is None  # no solver internals either
-    # the operator view stays — §8a interim default all_consumers + plant
+    # the operator view stays — default all_consumers + source SCADA
     assert frame["measurements"]["preset"] == "all_consumers"
-    assert len(frame["measurements"]["consumers"]) == 3
-    assert frame["observed_summary"]["q_feed_kw"] > 0
-    assert frame["observed_summary"]["dp_worst_bar"] is not None
-    # equipment/weather/controls remain visible (SPEC §6)
-    assert frame["producers"] and frame["weather"] and frame["controls"]
+    assert len(frame["measurements"]["consumers"]) == 2
+    assert frame["observed_summary"]["mdot_feed_kg_per_s"] > 0
+    assert frame["observed_summary"]["p_min_bar"] is not None
+    # supply/controls remain visible
+    assert frame["producers"] and frame["controls"] is not None
 
 
 def test_strict_mode_strips_truth_from_state_history_and_ws():
@@ -72,7 +72,6 @@ def test_nonconvergence_is_data_over_the_api_never_500(monkeypatch):
         assert frame["junctions"] == []  # honest empty shell, no fake physics
         assert frame["measurements"] == {}
         assert frame["observed_summary"] is None
-        assert frame["weather"]["t_ground_c"] == 10.0  # live inputs still real
 
         # the loop keeps ticking through failures
         first = (frame["day"], frame["step"])
@@ -103,6 +102,6 @@ def test_nonconvergence_after_success_reuses_last_state_over_api(monkeypatch):
             (f := client.get("/state").json())
             and f["converged"] is False and f))
         assert failed["solver_status"] == "failed"
-        # physics payload = last converged state (SPEC §3.3), status 200
-        assert failed["summary"]["q_feed_kw"] == good["summary"]["q_feed_kw"]
+        # physics payload = last converged state, status 200
+        assert failed["summary"]["p_min_bar"] == good["summary"]["p_min_bar"]
         assert len(failed["junctions"]) == len(good["junctions"])

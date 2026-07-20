@@ -1,4 +1,4 @@
-"""Forced non-convergence (SPEC §3.3, §12 M1 acceptance).
+"""Forced non-convergence — the never-500 discipline.
 
 Sabotage the solve → the frame carries ``converged=false`` /
 ``solver_status="failed"``, the last converged state is reused, the engine
@@ -11,9 +11,9 @@ import asyncio
 import numpy as np
 from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
 
-import rtheatflow.simulator as simulator_module
-from rtheatflow.engine import RealtimeEngine
-from rtheatflow.simulator import Simulator
+import rtwaterflow.simulator as simulator_module
+from rtwaterflow.engine import RealtimeEngine
+from rtwaterflow.simulator import Simulator
 
 from conftest import make_settings
 
@@ -24,8 +24,8 @@ def _sabotage(monkeypatch):
     monkeypatch.setattr(simulator_module, "pipeflow", boom)
 
 
-def test_failed_frame_reuses_last_converged_state(appendix_a_inputs, monkeypatch):
-    sim = Simulator(appendix_a_inputs, make_settings())
+def test_failed_frame_reuses_last_converged_state(hillside_inputs, monkeypatch):
+    sim = Simulator(hillside_inputs, make_settings())
     ok = sim.run_step(0, 0)
     assert ok.converged
 
@@ -35,31 +35,32 @@ def test_failed_frame_reuses_last_converged_state(appendix_a_inputs, monkeypatch
     assert failed.converged is False
     assert failed.solver_status == "failed"
     assert failed.error and "sabotaged" in failed.error
-    # physics payload = last converged state (SPEC §3.3)
-    assert failed.summary["q_feed_kw"] == ok.summary["q_feed_kw"]
+    # physics payload = last converged state
+    assert failed.summary["p_min_bar"] == ok.summary["p_min_bar"]
     assert len(failed.junctions) == len(ok.junctions)
-    # init reset to the current supply temperature (SPEC §3.4)
-    assert np.allclose(sim.net.junction["tfluid_k"].to_numpy(), 358.15)
+    # init reset to BUILD-TIME pressures (pn_bar only — no thermal state)
+    assert np.allclose(sim.net.junction["pn_bar"].to_numpy(),
+                       sim.index.init_pn_bar)
 
 
-def test_failure_before_any_convergence_is_survivable(appendix_a_inputs, monkeypatch):
-    sim = Simulator(appendix_a_inputs, make_settings())
+def test_failure_before_any_convergence_is_survivable(hillside_inputs,
+                                                      monkeypatch):
+    sim = Simulator(hillside_inputs, make_settings())
     _sabotage(monkeypatch)
     frame = sim.run_step(0, 0)
     assert frame.converged is False
     assert frame.solver_status == "failed"
     assert frame.summary == {}          # honest empty shell, no fake physics
     assert frame.junctions == []
-    assert frame.weather["t_ground_c"] == 10.0  # live inputs still reported
 
 
-def test_engine_keeps_ticking_through_failures(appendix_a_inputs, monkeypatch):
-    """No exception escapes the loop; failed frames keep flowing (SPEC §3.3)."""
+def test_engine_keeps_ticking_through_failures(hillside_inputs, monkeypatch):
+    """No exception escapes the loop; failed frames keep flowing."""
     _sabotage(monkeypatch)
 
     async def main():
         settings = make_settings(step_interval_seconds=0.01)
-        sim = Simulator(appendix_a_inputs, settings)
+        sim = Simulator(hillside_inputs, settings)
         engine = RealtimeEngine(sim, settings=settings)
         await engine.start()
         try:
@@ -80,9 +81,9 @@ def test_engine_keeps_ticking_through_failures(appendix_a_inputs, monkeypatch):
     assert frames[-1].step > frames[0].step
 
 
-def test_recovery_after_transient_failure(appendix_a_inputs, monkeypatch):
+def test_recovery_after_transient_failure(hillside_inputs, monkeypatch):
     """A non-converged frame self-heals next tick once the cause is gone."""
-    sim = Simulator(appendix_a_inputs, make_settings())
+    sim = Simulator(hillside_inputs, make_settings())
     assert sim.run_step(0, 0).converged
 
     real_pipeflow = simulator_module.pipeflow
@@ -90,7 +91,7 @@ def test_recovery_after_transient_failure(appendix_a_inputs, monkeypatch):
 
     def flaky(net, **kwargs):
         calls["n"] += 1
-        if calls["n"] <= 4:  # poison all 4 ladder tiers of one step
+        if calls["n"] <= 3:  # poison all 3 ladder tiers of one step
             raise PipeflowNotConverged("transient (test)")
         return real_pipeflow(net, **kwargs)
 

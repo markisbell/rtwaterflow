@@ -1,0 +1,8 @@
+{
+  "pipes": [
+    {"from_node": "j1", "to_node": "j2", "length_km": 0.545, "inner_diameter_mm": 200, "k_mm": 0.2},
+    {"from_node": "j2", "to_node": "j3", "length_km": 0.095, "inner_diameter_mm": 150, "k_mm": 0.2},
+    {"from_node": "j1", "to_node": "j4", "length_km": 0.285, "inner_diameter_mm": 150, "k_mm": 0.2},
+    {"from_node": "j1", "to_node": "j5", "length_km": 0.430, "inner_diameter_mm": 150, "k_mm": 0.5}
+  ]
+}

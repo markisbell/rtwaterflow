@@ -1,33 +1,24 @@
 import type {
   ActiveConfig,
   ApplyResponse,
-  ArchetypeInfo,
-  AssignPreview,
-  DpControlInfo,
   EngineStatus,
   EstimationConfigInfo,
   ExportStatus,
-  HeatingCurveInfo,
-  HeatingCurveParams,
-  LoadgenPolicy,
   MeasurementsResponse,
   MeterMode,
   MeterPreset,
   NetworkImportBundle,
   NetworkListItem,
   NetworkPreview,
-  PlantKind,
   RecordingInfo,
   RecordingStatus,
   ScenarioInfo,
   StepResult,
-  StorageInfo,
   Topology,
-  WeatherInfo,
 } from "./types";
 
 // All backend calls go through "/api" (Vite dev proxy / nginx in prod);
-// the prefix is stripped by the proxy rewrite (SPEC §9.3).
+// the prefix is stripped by the proxy rewrite.
 const API = "/api";
 
 async function get<T>(path: string): Promise<T> {
@@ -46,23 +37,13 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-async function put<T>(path: string, body: unknown): Promise<T> {
-  const r = await fetch(`${API}${path}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(`PUT ${path} -> ${r.status} ${await r.text()}`);
-  return r.json() as Promise<T>;
-}
-
 async function del<T>(path: string): Promise<T> {
   const r = await fetch(`${API}${path}`, { method: "DELETE" });
   if (!r.ok) throw new Error(`DELETE ${path} -> ${r.status} ${await r.text()}`);
   return r.json() as Promise<T>;
 }
 
-// Typed wrappers for the M2 surface (docs/API.md; engine verbs take JSON
+// Typed wrappers for the M0 surface (docs/API.md; engine verbs take JSON
 // bodies, unlike the blueprint's query params).
 export const api = {
   network: () => get<Topology>("/network"),
@@ -78,72 +59,17 @@ export const api = {
   stepInterval: (seconds: number) =>
     post<EngineStatus>("/control/interval", { seconds }),
 
-  weather: () => get<WeatherInfo>("/weather"),
-  setWeatherOverride: (t_amb_c: number) =>
-    put<WeatherInfo>("/weather/override", { t_amb_c }),
-  clearWeatherOverride: () => del<WeatherInfo>("/weather/override"),
-
-  heatingCurve: () => get<HeatingCurveInfo>("/heatingcurve"),
-  setHeatingCurve: (cfg: Partial<HeatingCurveParams> & { preset?: "3G" | "4G" }) =>
-    post<HeatingCurveInfo>("/heatingcurve", cfg),
-
-  // ---- M4: Δp control (SPEC §4.3) ----
-  dpControl: () => get<DpControlInfo>("/dpcontrol"),
-  setDpControl: (cfg: {
-    mode?: "controlled" | "fixed";
-    setpoint_bar?: number;
-    plift_bar?: number;
-  }) => post<DpControlInfo>("/dpcontrol", cfg),
-
-  // ---- M4: producers ----
   producers: () => get<Record<string, unknown>[]>("/producers"),
-  addProducer: (body: {
-    node: string;
-    kind: "heat_exchanger" | "pump_mass";
-    name?: string;
-    qext_w?: number;
-    inner_diameter_mm?: number;
-    mdot_flow_kg_per_s?: number;
-    t_flow_k?: number;
-  }) => post<{ added: { id: number } }>("/producer", body),
-  configProducer: (id: number, body: {
-    qext_w?: number;
-    mdot_flow_kg_per_s?: number;
-    t_flow_k?: number;
-    plant_kind?: PlantKind;
-    eta_g?: number;
-    t_cold_source?: "t_amb" | "t_ground";
-  }) => post<unknown>(`/producer/${id}/config`, body),
-  removeProducer: (id: number) => del<unknown>(`/producer/${id}`),
 
-  // ---- M4: storage (SPEC §4.4) ----
-  storages: () => get<StorageInfo[]>("/storages"),
-  addStorage: (body: {
-    node: string;
-    capacity_kwh: number;
-    power_kw: number;
-    name?: string;
-  }) => post<{ added: StorageInfo }>("/storage", body),
-  configStorage: (id: number, body: {
-    mode?: "idle" | "charge" | "discharge";
-    power_kw?: number;
-    capacity_kwh?: number;
-  }) => post<unknown>(`/storage/${id}/config`, body),
-  removeStorage: (id: number) => del<unknown>(`/storage/${id}`),
-
-  // ---- M4: consumers & bypass (SPEC §3.2/§4.4) ----
+  // ---- consumers (M0: fixed demand) ----
   addConsumer: (body: {
     node: string;
     name?: string;
-    archetype?: string;
-    seed?: number;
-    q_kw?: number;
-    treturn_c?: number;
+    mdot_kg_per_s: number;
   }) => post<{ added: { id: number } }>("/consumer", body),
   removeConsumer: (id: number) => del<unknown>(`/consumer/${id}`),
-  addBypass: (node: string) => post<{ added: { id: number } }>("/bypass", { node }),
 
-  // ---- M5: sensor placement (SPEC §7 Sensors row, §8a) ----
+  // ---- sensor placement ----
   measurements: () => get<MeasurementsResponse>("/measurements"),
   placeConsumerMeter: (id: number) =>
     post<MeasurementsResponse>(`/measurements/consumer/${id}`),
@@ -158,34 +84,27 @@ export const api = {
   setMeasurementPreset: (preset: MeterPreset) =>
     post<MeasurementsResponse>("/measurements/preset", { preset }),
 
-  // ---- M7: estimation policy (SPEC §8a) ----
+  // ---- estimation policy (stub in M0) ----
   estimationConfig: () => get<EstimationConfigInfo>("/estimation/config"),
-  setEstimationConfig: (body: Partial<Pick<EstimationConfigInfo,
-    "enabled" | "prior_basis" | "throttle_factor">>) =>
-    post<EstimationConfigInfo>("/estimation/config", body),
   manualUrl: () => `${API}/manual`,
 
-  // ---- M4: network catalog + loadgen + swap (SPEC §4.5/§4.6) ----
+  // ---- network catalog + swap ----
   networks: () => get<{ available: boolean; networks: NetworkListItem[] }>("/networks"),
   networkPreview: (id: string) => get<NetworkPreview>(`/networks/${id}`),
   importNetwork: (bundle: NetworkImportBundle) =>
     post<NetworkPreview>("/networks/import", bundle),
-  archetypes: () =>
-    get<{ available: boolean; archetypes: ArchetypeInfo[] }>("/loadgen/archetypes"),
-  assign: (network_id: string, policy: LoadgenPolicy) =>
-    post<AssignPreview>("/loadgen/assign", { network_id, policy }),
-  applyConfig: (network_id: string, loadgen?: LoadgenPolicy) =>
-    post<ApplyResponse>("/config/apply", { network_id, loadgen }),
+  applyConfig: (network_id: string) =>
+    post<ApplyResponse>("/config/apply", { network_id }),
   activeConfig: () => get<ActiveConfig>("/config/active"),
 
-  // ---- M4: scenarios (SPEC §4.6) ----
+  // ---- scenarios ----
   scenarios: () => get<{ scenarios: ScenarioInfo[] }>("/scenarios"),
   saveScenario: (name: string, description = "") =>
     post<{ id: string; name: string }>("/scenarios", { name, description }),
   loadScenario: (sid: string) => post<ApplyResponse>(`/scenarios/${sid}/load`),
   deleteScenario: (sid: string) => del<unknown>(`/scenarios/${sid}`),
 
-  // ---- M6: session recording + bulk export (SPEC §4.6/§7) ----
+  // ---- session recording + bulk export ----
   recording: () => get<RecordingStatus>("/recording"),
   recordingStart: (name?: string) =>
     post<RecordingStatus>("/recording/start", name ? { name } : undefined),

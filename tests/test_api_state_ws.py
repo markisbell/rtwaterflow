@@ -1,6 +1,6 @@
-"""/state, /history and WS /ws behavior (SPEC §6, §7; §12 M2 acceptance).
+"""/state, /history and WS /ws behavior.
 
-* ``/state`` is 404 **before the first solve** and a full §6 StepResult wire
+* ``/state`` is 404 **before the first solve** and a full StepResult wire
   frame after one tick.
 * WS: latest frame on connect, then one frame per solved step; frame shape
   identical to ``GET /state`` (single asdict()+projection path).
@@ -12,7 +12,7 @@ from dataclasses import fields
 
 from conftest import make_api_client, wait_for
 
-from rtheatflow.simulator import StepResult
+from rtwaterflow.simulator import StepResult
 
 STEP_RESULT_KEYS = {f.name for f in fields(StepResult)}
 
@@ -29,20 +29,19 @@ def test_state_404_before_first_solve_then_stepresult_shape():
         assert r.status_code == 404
 
         frame = _first_frame(client)
-        assert set(frame) == STEP_RESULT_KEYS  # the §6 wire contract, exactly
+        assert set(frame) == STEP_RESULT_KEYS  # the wire contract, exactly
         assert frame["converged"] is True
         assert frame["solver_status"] == "ok"
         assert frame["junctions"] and frame["pipes"] and frame["consumers"]
-        assert frame["summary"]["q_feed_kw"] > 0
-        assert frame["weather"]["t_ground_c"] == 10.0
-        # §8a interim rule: every frame carries the observed layer
+        assert frame["summary"]["p_min_bar"] > 0
+        assert frame["summary"]["mdot_feed_kg_per_s"] > 0
+        # every frame carries the observed layer
         assert frame["measurements"]["preset"] == "all_consumers"
-        assert len(frame["measurements"]["consumers"]) == 3
-        assert frame["observed_summary"]["n_metered"] == 3
-        # heat meters expose meter channels only — no ground-truth extras
+        assert len(frame["measurements"]["consumers"]) == 2
+        assert frame["observed_summary"]["n_metered"] == 2
+        # water meters expose meter channels only — no ground-truth extras
         meter = frame["measurements"]["consumers"][0]
-        assert set(meter) == {"id", "name", "node", "q_kw", "mdot_kg_per_s",
-                              "t_supply_c", "t_return_c", "dp_bar"}
+        assert set(meter) == {"id", "name", "node", "mdot_kg_per_s", "p_bar"}
 
 
 def test_history_returns_frames_and_validates_limit():
@@ -53,7 +52,7 @@ def test_history_returns_frames_and_validates_limit():
         assert 1 <= len(frames) <= 5
         assert set(frames[-1]) == STEP_RESULT_KEYS
 
-        # 422 outside 1..10000 (SPEC §7 semantic limits)
+        # 422 outside 1..10000
         assert client.get("/history", params={"limit": 0}).status_code == 422
         assert client.get("/history", params={"limit": -3}).status_code == 422
         assert client.get("/history", params={"limit": 10001}).status_code == 422
@@ -97,18 +96,21 @@ def test_monitor_and_meta_endpoints():
 
         health = client.get("/health").json()
         assert health["status"] == "ok"
+        assert health["name"] == "rtwaterflow"
 
         status = client.get("/status").json()
         assert status["running"] is False
         assert status["steps_per_day"] == 1440
-        assert status["network"]["id"] == "appendix_a"
+        assert status["network"]["id"] == "tutorial_hillside"
         assert status["latest"] is None
 
         topo = client.get("/network").json()
-        assert {n["name"] for n in topo["nodes"]} == {"n0", "n1", "n2", "n3"}
-        assert len(topo["trenches"]) == 3
+        assert {n["name"] for n in topo["nodes"]} == {"j1", "j2", "j3", "j4",
+                                                      "j5"}
+        assert len(topo["trenches"]) == 4
         for trench in topo["trenches"]:
-            assert set(trench["pipes"]) == {"supply", "return"}  # pair grouping
-            assert len(trench["geometry"]) >= 2                  # trench geometry
-        assert len(topo["consumers"]) == 3
+            assert isinstance(trench["pipe"], int)   # single pipe layer
+            assert len(trench["geometry"]) >= 2
+        assert all("elevation_m" in n for n in topo["nodes"])
+        assert len(topo["consumers"]) == 2
         assert topo["producers"][0]["kind"] == "slack"

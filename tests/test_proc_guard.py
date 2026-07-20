@@ -1,8 +1,8 @@
-"""Tests for the process leak guard helper (``rtheatflow.proc_guard``).
+"""Tests for the process leak guard helper (``rtwaterflow.proc_guard``).
 
 The helper backs the session-scoped pytest leak guard and the
-``rtheatflow.main`` startup preflight. These tests spawn a lightweight dummy
-whose command line carries the ``rtheatflow.main`` marker (but which never runs
+``rtwaterflow.main`` startup preflight. These tests spawn a lightweight dummy
+whose command line carries the ``rtwaterflow.main`` marker (but which never runs
 the real server / binds a port), confirm the helper detects it, and confirm it
 disappears after the process tree is killed — so the guard neither misses a
 leak nor false-flags a cleaned-up process.
@@ -16,12 +16,12 @@ import time
 
 import pytest
 
-from rtheatflow.proc_guard import MARKER, live_backend_pids
+from rtwaterflow.proc_guard import MARKER, live_backend_pids
 
 
 def _spawn_marker_process() -> subprocess.Popen:
     """A python process that idles but whose argv contains the marker, without
-    importing rtheatflow or binding any port."""
+    importing rtwaterflow or binding any port."""
     return subprocess.Popen(
         [sys.executable, "-c", "import time; time.sleep(30)", MARKER],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

@@ -1,27 +1,14 @@
-# visualization/ — InfluxDB + Grafana stack (SPEC §9.3)
+# Visualization stack (InfluxDB + Grafana)
 
-Second consumer of the realtime API (next to the interactive UI): a
-`collector` polls `GET /state` every `POLL_INTERVAL_SECONDS` (default 0.5 s),
-deduplicates on `(day, step)` so every simulated step lands exactly once, and
-writes summary / junction / pipe / consumer / producer / storage points into
-InfluxDB 2.7 with **wall-clock timestamps** — a Grafana "last 5 minutes" view
-follows the accelerated simulation live.
+`docker compose up -d` starts the full stack; the collector polls
+`GET /state` every 0.5 s, dedupes on `(day, step)` and writes the hydraulic
+wire into InfluxDB bucket `waterflow` (org `rtwaterflow`).
 
-Grafana 11 is fully file-provisioned (no clicking): the datasource
-(`provisioning/datasources/influxdb.yml`) and the dashboard
-(`dashboards/rtheatflow.json`) ship in-repo. Panels: plant supply/return vs
-heating-curve setpoint, worst-point Δp vs setpoint + pump lift, loss ratio,
-producer dispatch stack, storage SoC, solve time, solver status
-(OK/DEGRADED/FAILED mapping).
+Grafana: http://localhost:3002 (admin / rtwaterflow-admin), dashboard
+"rtwaterflow — Realtime Drinking Water" (file-provisioned from
+`grafana/dashboards/rtwaterflow.json`): min service pressure (Schlechtpunkt)
+vs the 2.0 bar DVGW threshold, feed/demand/delivered mass flow, per-consumer
+pressures, solve time, solver status.
 
-Run it via the repo-root `docker-compose.yml`:
-
-```bash
-docker compose up --build
-# Grafana:  http://localhost:3000  (admin/admin — dev credentials)
-# InfluxDB: http://localhost:8086  (admin/rtheatflow-admin)
-```
-
-⚠️ All credentials/tokens here are development defaults, wired identically
-into `docker-compose.yml`, the datasource provisioning and the collector env.
-Change them together if the stack ever leaves a trusted machine.
+InfluxDB: http://localhost:8088 (dev credentials in docker-compose.yml —
+change for anything public).
