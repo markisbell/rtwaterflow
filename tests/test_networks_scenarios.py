@@ -24,11 +24,24 @@ def test_networks_list_and_preview():
         r = client.get("/networks").json()
         assert r["available"] is True
         ids = {n["id"] for n in r["networks"]}
-        assert "tutorial_hillside" in ids
+        assert {"tutorial_hillside", "musterdorf"} <= ids
         entry = next(n for n in r["networks"]
                      if n["id"] == "tutorial_hillside")
         assert entry["nodes"] == 5
         assert entry["pipe_km"] == pytest.approx(1.355, abs=0.01)
+
+        # musterdorf library stats + catalog-path load (M1 review: the
+        # hand-maintained entry and the preview() path were unpinned)
+        md = next(n for n in r["networks"] if n["id"] == "musterdorf")
+        assert md["nodes"] == 33
+        assert md["pipe_km"] == pytest.approx(3.885, abs=0.01)
+        prev = client.get("/networks/musterdorf").json()
+        assert prev["n_pipes"] == 32
+        assert prev["n_consumers"] == 26
+        assert prev["demand_kg_per_s"] == pytest.approx(3.09, abs=0.001)
+        assert prev["elevation_min_m"] == 303.0
+        assert prev["elevation_max_m"] == 420.0
+        assert prev["supply"]["node"] == "hb"
 
         p = client.get("/networks/tutorial_hillside").json()
         assert p["n_consumers"] == 2

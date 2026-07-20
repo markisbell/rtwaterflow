@@ -420,6 +420,23 @@ class Simulator:
                     "mdot_kg_per_s": _r(abs(
                         net.res_ext_grid.mdot_kg_per_s.loc[meta["element"]])),
                 })
+            elif meta["kind"] == "prv":
+                # PRV entries are STATION SCADA (real Druckminderer stations
+                # carry in/out gauges + a flowmeter — TF §7): like the source
+                # they stay on the wire in strict mode. mdot is SIGNED
+                # (negative = reverse flow through the valve) and `reducing`
+                # honestly flags the press_control failure modes the M1
+                # static PRV cannot prevent (boosting when the upstream head
+                # collapses, back-feeding) — M2 supervision acts on them.
+                r = net.res_press_control.loc[meta["element"]]
+                entry.update({
+                    "p_set_bar": _r(net.press_control.at[
+                        meta["element"], "controlled_p_bar"]),
+                    "p_out_bar": _r(r.p_to_bar),
+                    "p_in_bar": _r(r.p_from_bar),
+                    "mdot_kg_per_s": _r(r.mdot_from_kg_per_s),
+                    "reducing": bool(r.deltap_bar < 0),
+                })
             producers.append(entry)
 
         payload = {

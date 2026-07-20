@@ -1,0 +1,548 @@
+{
+ "pipes": [
+  {
+   "from_node": "hb",
+   "to_node": "z1",
+   "dn": 150,
+   "material": "GGG",
+   "year_laid": 1992,
+   "geometry": [
+    [
+     49.46,
+     9.0
+    ],
+    [
+     49.4593,
+     9.0012
+    ]
+   ]
+  },
+  {
+   "from_node": "z1",
+   "to_node": "h1",
+   "dn": 150,
+   "material": "GGG",
+   "year_laid": 1992,
+   "geometry": [
+    [
+     49.4593,
+     9.0012
+    ],
+    [
+     49.4585,
+     9.0022
+    ]
+   ]
+  },
+  {
+   "from_node": "h1",
+   "to_node": "h2",
+   "dn": 100,
+   "material": "GGG",
+   "year_laid": 1992,
+   "geometry": [
+    [
+     49.4585,
+     9.0022
+    ],
+    [
+     49.4578,
+     9.0035
+    ]
+   ]
+  },
+  {
+   "from_node": "h2",
+   "to_node": "h3",
+   "dn": 100,
+   "material": "GGG",
+   "year_laid": 1992,
+   "geometry": [
+    [
+     49.4578,
+     9.0035
+    ],
+    [
+     49.4571,
+     9.0048
+    ]
+   ]
+  },
+  {
+   "from_node": "h3",
+   "to_node": "h4",
+   "dn": 100,
+   "material": "GGG",
+   "year_laid": 1992,
+   "geometry": [
+    [
+     49.4571,
+     9.0048
+    ],
+    [
+     49.4563,
+     9.006
+    ]
+   ]
+  },
+  {
+   "from_node": "h2",
+   "to_node": "h5",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2011,
+   "geometry": [
+    [
+     49.4578,
+     9.0035
+    ],
+    [
+     49.4585,
+     9.0043
+    ]
+   ]
+  },
+  {
+   "from_node": "h5",
+   "to_node": "h6",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2011,
+   "geometry": [
+    [
+     49.4585,
+     9.0043
+    ],
+    [
+     49.459,
+     9.0055
+    ]
+   ]
+  },
+  {
+   "from_node": "h6",
+   "to_node": "h7",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2011,
+   "geometry": [
+    [
+     49.459,
+     9.0055
+    ],
+    [
+     49.4595,
+     9.0068
+    ]
+   ]
+  },
+  {
+   "from_node": "h6",
+   "to_node": "h10",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2014,
+   "geometry": [
+    [
+     49.459,
+     9.0055
+    ],
+    [
+     49.4596,
+     9.0047
+    ]
+   ]
+  },
+  {
+   "from_node": "h7",
+   "to_node": "h11",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2014,
+   "geometry": [
+    [
+     49.4595,
+     9.0068
+    ],
+    [
+     49.4602,
+     9.0075
+    ]
+   ]
+  },
+  {
+   "from_node": "h3",
+   "to_node": "h8",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2008,
+   "geometry": [
+    [
+     49.4571,
+     9.0048
+    ],
+    [
+     49.4564,
+     9.004
+    ]
+   ]
+  },
+  {
+   "from_node": "h8",
+   "to_node": "h9",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2008,
+   "geometry": [
+    [
+     49.4564,
+     9.004
+    ],
+    [
+     49.4557,
+     9.0033
+    ]
+   ]
+  },
+  {
+   "from_node": "h4",
+   "to_node": "dm_i",
+   "dn": 150,
+   "material": "GGG",
+   "year_laid": 1992,
+   "geometry": [
+    [
+     49.4563,
+     9.006
+    ],
+    [
+     49.455,
+     9.0075
+    ]
+   ]
+  },
+  {
+   "from_node": "dm_o",
+   "to_node": "r1",
+   "dn": 150,
+   "material": "GGG",
+   "year_laid": 1995,
+   "geometry": [
+    [
+     49.4549,
+     9.0076
+    ],
+    [
+     49.4543,
+     9.0085
+    ]
+   ]
+  },
+  {
+   "from_node": "r1",
+   "to_node": "r2",
+   "dn": 125,
+   "material": "GGG",
+   "year_laid": 1995,
+   "geometry": [
+    [
+     49.4543,
+     9.0085
+    ],
+    [
+     49.4536,
+     9.0098
+    ]
+   ]
+  },
+  {
+   "from_node": "r2",
+   "to_node": "r3",
+   "dn": 125,
+   "material": "GGG",
+   "year_laid": 1995,
+   "geometry": [
+    [
+     49.4536,
+     9.0098
+    ],
+    [
+     49.4529,
+     9.0111
+    ]
+   ]
+  },
+  {
+   "from_node": "r3",
+   "to_node": "r4",
+   "dn": 110,
+   "material": "PE",
+   "year_laid": 2016,
+   "geometry": [
+    [
+     49.4529,
+     9.0111
+    ],
+    [
+     49.4521,
+     9.0123
+    ]
+   ]
+  },
+  {
+   "from_node": "r4",
+   "to_node": "r5",
+   "dn": 110,
+   "material": "PE",
+   "year_laid": 2016,
+   "geometry": [
+    [
+     49.4521,
+     9.0123
+    ],
+    [
+     49.4513,
+     9.0135
+    ]
+   ]
+  },
+  {
+   "from_node": "r5",
+   "to_node": "r6",
+   "dn": 110,
+   "material": "PE",
+   "year_laid": 2016,
+   "geometry": [
+    [
+     49.4513,
+     9.0135
+    ],
+    [
+     49.4506,
+     9.0122
+    ]
+   ]
+  },
+  {
+   "from_node": "r6",
+   "to_node": "r7",
+   "dn": 110,
+   "material": "PE",
+   "year_laid": 2016,
+   "geometry": [
+    [
+     49.4506,
+     9.0122
+    ],
+    [
+     49.451,
+     9.0105
+    ]
+   ]
+  },
+  {
+   "from_node": "r7",
+   "to_node": "r8",
+   "dn": 125,
+   "material": "GG",
+   "year_laid": 1965,
+   "geometry": [
+    [
+     49.451,
+     9.0105
+    ],
+    [
+     49.4517,
+     9.0092
+    ]
+   ]
+  },
+  {
+   "from_node": "r8",
+   "to_node": "r9",
+   "dn": 125,
+   "material": "GG",
+   "year_laid": 1965,
+   "geometry": [
+    [
+     49.4517,
+     9.0092
+    ],
+    [
+     49.4525,
+     9.008
+    ]
+   ]
+  },
+  {
+   "from_node": "r9",
+   "to_node": "r10",
+   "dn": 125,
+   "material": "GGG",
+   "year_laid": 1988,
+   "geometry": [
+    [
+     49.4525,
+     9.008
+    ],
+    [
+     49.4534,
+     9.0072
+    ]
+   ]
+  },
+  {
+   "from_node": "r10",
+   "to_node": "r1",
+   "dn": 125,
+   "material": "GGG",
+   "year_laid": 1988,
+   "geometry": [
+    [
+     49.4534,
+     9.0072
+    ],
+    [
+     49.4543,
+     9.0085
+    ]
+   ]
+  },
+  {
+   "from_node": "r3",
+   "to_node": "b1",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2016,
+   "geometry": [
+    [
+     49.4529,
+     9.0111
+    ],
+    [
+     49.4534,
+     9.0122
+    ]
+   ]
+  },
+  {
+   "from_node": "r4",
+   "to_node": "b2",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2016,
+   "geometry": [
+    [
+     49.4521,
+     9.0123
+    ],
+    [
+     49.4526,
+     9.0135
+    ]
+   ]
+  },
+  {
+   "from_node": "r5",
+   "to_node": "b3",
+   "dn": 110,
+   "material": "PE",
+   "year_laid": 2018,
+   "geometry": [
+    [
+     49.4513,
+     9.0135
+    ],
+    [
+     49.4497,
+     9.014
+    ]
+   ]
+  },
+  {
+   "from_node": "r6",
+   "to_node": "b4",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2005,
+   "geometry": [
+    [
+     49.4506,
+     9.0122
+    ],
+    [
+     49.4498,
+     9.011
+    ]
+   ]
+  },
+  {
+   "from_node": "r7",
+   "to_node": "b5",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 2005,
+   "geometry": [
+    [
+     49.451,
+     9.0105
+    ],
+    [
+     49.4503,
+     9.009
+    ]
+   ]
+  },
+  {
+   "from_node": "r8",
+   "to_node": "b6",
+   "dn": 110,
+   "material": "PE",
+   "year_laid": 2010,
+   "geometry": [
+    [
+     49.4517,
+     9.0092
+    ],
+    [
+     49.4512,
+     9.007
+    ]
+   ]
+  },
+  {
+   "from_node": "r9",
+   "to_node": "b7",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 1999,
+   "geometry": [
+    [
+     49.4525,
+     9.008
+    ],
+    [
+     49.453,
+     9.006
+    ]
+   ]
+  },
+  {
+   "from_node": "r10",
+   "to_node": "b8",
+   "dn": 90,
+   "material": "PE",
+   "year_laid": 1999,
+   "geometry": [
+    [
+     49.4534,
+     9.0072
+    ],
+    [
+     49.4542,
+     9.006
+    ]
+   ]
+  }
+ ]
+}

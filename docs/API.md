@@ -35,7 +35,7 @@ limits · `500` internal failures only —
 - **`GET /health`** — Cheap liveness check for launchers/containers (no engine access).
 - **`GET /history`** — The most recent frames (oldest first), through the same projection path as ``/state``. Bounded by ``RTWATERFLOW_HISTORY_SIZE``.
 - **`GET /manual`** — The German user manual, rendered as HTML (``?format=md`` for the raw Markdown source). Authored in ``docs/Benutzerhandbuch.md``.
-- **`GET /network`** — Active network topology: nodes, trenches (shared supply/return geometry + per-side pipe element ids), consumers, producers. Rebuilt per request — equipment CRUD (M4) changes the consumer/producer inventory live.
+- **`GET /network`** — Active network topology: nodes (with elevation_m), trenches (single pipe layer, catalog sizing dn/material + geometry), consumers, producers and prvs (Druckminderer branches — zone boundaries). Rebuilt per request — consumer CRUD changes the inventory live.
 - **`GET /state`** — The latest StepResult wire frame (projected). **404 before the first solve**; a failed solve still yields a frame with ``converged=false``.
 - **`GET /status`** — Engine clock, run state, interval, active network, latest-frame digest.
 - **`WS /ws`** — accept → subscribe → send latest if present → receive loop (the client sends nothing; receiving only detects disconnect). Dead sockets are discarded by the store on send failure (SPEC §7).

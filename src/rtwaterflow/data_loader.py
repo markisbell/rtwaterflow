@@ -29,8 +29,14 @@ from .models import (
     NetworkStructure,
     PipesFile,
     SupplyFile,
+    _haversine_km,
 )
 from .net_inputs import NetInputs
+
+#: geometry endpoints must anchor to their node coordinates within this
+#: distance — the polyline is load-bearing (derived pipe length + flow-arrow
+#: orientation), so a reversed or mis-anchored digitization must fail loudly
+GEOMETRY_ANCHOR_KM = 0.05
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +103,27 @@ def cross_validate(inputs: NetInputs) -> None:
     for s in inputs.supply.supplies:
         if s.node not in nodes:
             errors.append(f"supply {s.name or s.kind}: unknown node {s.node!r}")
+    for v in inputs.supply.prvs:
+        for ref in (v.from_node, v.to_node):
+            if ref not in nodes:
+                errors.append(f"prv {v.from_node}->{v.to_node}: unknown node {ref!r}")
+
+    # --- geometry anchoring: the polyline is physics input (derived length,
+    # arrow orientation) — its ends must sit on the from/to nodes ---
+    node_geo = {j.name: j.geo for j in inputs.structure.junctions}
+    for p in inputs.pipes.pipes:
+        if not p.geometry or p.from_node not in node_geo \
+                or p.to_node not in node_geo:
+            continue
+        d_from = _haversine_km(tuple(p.geometry[0]), node_geo[p.from_node])
+        d_to = _haversine_km(tuple(p.geometry[-1]), node_geo[p.to_node])
+        if d_from > GEOMETRY_ANCHOR_KM or d_to > GEOMETRY_ANCHOR_KM:
+            errors.append(
+                f"pipe {p.from_node}->{p.to_node}: geometry ends do not "
+                f"anchor to the from/to nodes (from {d_from * 1000:.0f} m, "
+                f"to {d_to * 1000:.0f} m away; limit "
+                f"{GEOMETRY_ANCHOR_KM * 1000:.0f} m) — reversed or "
+                "mis-digitized polyline?")
 
     # --- horizon: whole days ---
     total_min = inputs.environment.steps * inputs.environment.resolution_minutes
@@ -108,7 +135,8 @@ def cross_validate(inputs: NetInputs) -> None:
     if len(slacks) != 1:
         errors.append(f"exactly one slack (ext_grid) required, got {len(slacks)}")
 
-    # --- reachability over the pipe graph ---
+    # --- reachability over the pipe graph (PRVs are branch elements and
+    # count as edges — a zone fed only through a PRV is reachable) ---
     adjacency: dict[str, set[str]] = defaultdict(set)
     degree: dict[str, int] = defaultdict(int)
     for p in inputs.pipes.pipes:
@@ -116,6 +144,11 @@ def cross_validate(inputs: NetInputs) -> None:
         adjacency[p.to_node].add(p.from_node)
         degree[p.from_node] += 1
         degree[p.to_node] += 1
+    for v in inputs.supply.prvs:
+        adjacency[v.from_node].add(v.to_node)
+        adjacency[v.to_node].add(v.from_node)
+        degree[v.from_node] += 1
+        degree[v.to_node] += 1
 
     if slacks:
         reachable = _bfs(adjacency, slacks[0].node)
@@ -135,6 +168,23 @@ def cross_validate(inputs: NetInputs) -> None:
     for j in inputs.structure.junctions:
         if degree.get(j.name, 0) == 0:
             errors.append(f"node {j.name!r} has no pipes attached (isolated)")
+
+    # A PRV must be a CUT edge: a pipe path bypassing it would let the
+    # low zone see two contradictory heads (press_control has no state
+    # machine — the solve produces fictional fields with reverse valve
+    # flow instead of failing).
+    if slacks and inputs.supply.prvs:
+        pipes_only: dict[str, set[str]] = defaultdict(set)
+        for p in inputs.pipes.pipes:
+            pipes_only[p.from_node].add(p.to_node)
+            pipes_only[p.to_node].add(p.from_node)
+        reachable_wo_prv = _bfs(pipes_only, slacks[0].node)
+        for v in inputs.supply.prvs:
+            if v.to_node in reachable_wo_prv:
+                errors.append(
+                    f"prv {v.from_node}->{v.to_node}: a pipe path bypasses "
+                    "the valve — the zone boundary must be a cut (no "
+                    "parallel pipes around a Druckminderer)")
 
     if errors:
         raise DataContractError(errors)

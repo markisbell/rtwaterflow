@@ -1,0 +1,18 @@
+{
+ "supplies": [
+  {
+   "node": "hb",
+   "name": "Hochbehälter Musterberg",
+   "kind": "ext_grid",
+   "p_bar": 0.4
+  }
+ ],
+ "prvs": [
+  {
+   "from_node": "dm_i",
+   "to_node": "dm_o",
+   "name": "Druckminderer Talstraße",
+   "p_out_bar": 2.8
+  }
+ ]
+}

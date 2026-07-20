@@ -59,6 +59,35 @@ def test_swamee_jain_spelling_is_hyphenated():
     assert net.converged
 
 
+def test_press_control_holds_outlet_pressure():
+    """PRV pin (runtime-verified 2026-07-20): press_control holds
+    controlled_p_bar at its outlet regardless of the upstream head, and
+    res_press_control carries p_from/p_to/mdot_from — the M1 zone-boundary
+    element. NB it has NO open/active/closed state machine (it would even
+    RAISE pressure if asked) — static Durchlauf topologies only until the
+    M2 supervision."""
+    net = pp.create_empty_network(fluid="water")
+    a = pp.create_junction(net, pn_bar=3, tfluid_k=293.15, height_m=400.0)
+    b = pp.create_junction(net, pn_bar=3, tfluid_k=293.15, height_m=330.0)
+    c = pp.create_junction(net, pn_bar=3, tfluid_k=293.15, height_m=330.0)
+    d = pp.create_junction(net, pn_bar=3, tfluid_k=293.15, height_m=305.0)
+    pp.create_ext_grid(net, junction=a, p_bar=0.5, type="p")
+    pp.create_pipe_from_parameters(net, a, b, length_km=0.5,
+                                   inner_diameter_mm=150, k_mm=0.1)
+    pp.create_pipe_from_parameters(net, c, d, length_km=0.3,
+                                   inner_diameter_mm=100, k_mm=0.1)
+    pp.create_pressure_control(net, from_junction=b, to_junction=c,
+                               controlled_junction=c, controlled_p_bar=3.0)
+    pp.create_sink(net, junction=d, mdot_kg_per_s=1.0)
+    pp.pipeflow(net, mode="hydraulics", friction_model="colebrook")
+    assert net.converged
+    assert net.res_junction.p_bar.iloc[2] == pytest.approx(3.0, abs=1e-6)
+    assert net.res_junction.p_bar.iloc[1] > 6.0        # upstream head arrives
+    r = net.res_press_control.iloc[0]
+    assert abs(r.mdot_from_kg_per_s) == pytest.approx(1.0, rel=1e-3)
+    assert r.deltap_bar < 0                            # a genuine reduction
+
+
 def test_builder_single_layer_no_thermal_columns(hillside_inputs):
     """The water builder creates ONE junction per node with height_m set and
     passes no thermal pipe parameters (text_k stays at the signature default

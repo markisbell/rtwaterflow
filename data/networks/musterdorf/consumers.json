@@ -1,0 +1,186 @@
+{
+ "consumers": [
+  {
+   "node": "h2",
+   "name": "Bergstraße 1-9",
+   "mdot_kg_per_s": 0.08,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "h3",
+   "name": "Bergstraße 11-21",
+   "mdot_kg_per_s": 0.09,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "h5",
+   "name": "Panoramaweg 2-12",
+   "mdot_kg_per_s": 0.07,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "h6",
+   "name": "Panoramaweg 14-20",
+   "mdot_kg_per_s": 0.06,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "h7",
+   "name": "Am Hang 1-15",
+   "mdot_kg_per_s": 0.11,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "h8",
+   "name": "Kapellenweg 2-8",
+   "mdot_kg_per_s": 0.05,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "h9",
+   "name": "Kapellenweg 10-16",
+   "mdot_kg_per_s": 0.06,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "h10",
+   "name": "Panoramaweg 22-28",
+   "mdot_kg_per_s": 0.06,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "h11",
+   "name": "Am Hang 17-23",
+   "mdot_kg_per_s": 0.07,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "r2",
+   "name": "Hauptstraße 1-19 (MFH)",
+   "mdot_kg_per_s": 0.28,
+   "kind": "residential",
+   "storeys": 4
+  },
+  {
+   "node": "r3",
+   "name": "Grundschule Musterdorf",
+   "mdot_kg_per_s": 0.1,
+   "kind": "school",
+   "storeys": 3
+  },
+  {
+   "node": "r4",
+   "name": "Hauptstraße 21-39",
+   "mdot_kg_per_s": 0.16,
+   "kind": "residential",
+   "storeys": 3
+  },
+  {
+   "node": "r5",
+   "name": "Talstraße 2-16",
+   "mdot_kg_per_s": 0.14,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "r6",
+   "name": "Talstraße 18-30",
+   "mdot_kg_per_s": 0.12,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "r7",
+   "name": "Marktplatz (MFH)",
+   "mdot_kg_per_s": 0.24,
+   "kind": "residential",
+   "storeys": 4
+  },
+  {
+   "node": "r8",
+   "name": "Kirchgasse 1-11",
+   "mdot_kg_per_s": 0.1,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "r9",
+   "name": "Ringstraße 2-14",
+   "mdot_kg_per_s": 0.12,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "r10",
+   "name": "Brauerei Musterbräu",
+   "mdot_kg_per_s": 0.4,
+   "kind": "industry",
+   "storeys": 2
+  },
+  {
+   "node": "b1",
+   "name": "Gartenweg 1-9",
+   "mdot_kg_per_s": 0.07,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "b2",
+   "name": "Gartenweg 11-17",
+   "mdot_kg_per_s": 0.06,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "b3",
+   "name": "Milchviehhof Wiedemann",
+   "mdot_kg_per_s": 0.22,
+   "kind": "farm",
+   "storeys": 1
+  },
+  {
+   "node": "b4",
+   "name": "Wiesenweg 2-10",
+   "mdot_kg_per_s": 0.08,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "b5",
+   "name": "Wiesenweg 12-18",
+   "mdot_kg_per_s": 0.06,
+   "kind": "residential",
+   "storeys": 1
+  },
+  {
+   "node": "b6",
+   "name": "Freibad Musterdorf",
+   "mdot_kg_per_s": 0.12,
+   "kind": "pool",
+   "storeys": 1
+  },
+  {
+   "node": "b7",
+   "name": "Ringstraße 16-24",
+   "mdot_kg_per_s": 0.09,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "b8",
+   "name": "Ringstraße 26-32",
+   "mdot_kg_per_s": 0.08,
+   "kind": "residential",
+   "storeys": 2
+  }
+ ]
+}

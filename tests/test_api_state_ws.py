@@ -111,6 +111,8 @@ def test_monitor_and_meta_endpoints():
         for trench in topo["trenches"]:
             assert isinstance(trench["pipe"], int)   # single pipe layer
             assert len(trench["geometry"]) >= 2
+            assert "dn" in trench and "material" in trench  # catalog sizing
         assert all("elevation_m" in n for n in topo["nodes"])
         assert len(topo["consumers"]) == 2
         assert topo["producers"][0]["kind"] == "slack"
+        assert topo["prvs"] == []   # M1 key pinned (UI guards with ?? [])

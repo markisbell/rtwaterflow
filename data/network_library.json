@@ -8,6 +8,14 @@
    "nodes": 5,
    "pipe_km": 1.355,
    "dir": "networks/tutorial_hillside"
+  },
+  {
+   "id": "musterdorf",
+   "name": "Musterdorf (zwei Druckzonen)",
+   "character": "rural",
+   "nodes": 33,
+   "pipe_km": 3.885,
+   "dir": "networks/musterdorf"
   }
  ]
 }

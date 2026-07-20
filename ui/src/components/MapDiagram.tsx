@@ -80,6 +80,9 @@ export default function MapDiagram({
   const consRef = useRef<Map<number, L.CircleMarker>>(new Map());
   const nodeRef = useRef<Map<string, L.CircleMarker>>(new Map());
   const sensorRef = useRef<Map<string, L.Marker>>(new Map());
+  const arrowRef = useRef<Map<number, L.Marker>>(new Map());
+  const bearingRef = useRef<Map<number, number>>(new Map());
+  const prvRef = useRef<Map<number, L.CircleMarker>>(new Map());
   const plantRef = useRef<L.CircleMarker | null>(null);
   const [light, setLight] = useState(true);
 
@@ -148,8 +151,15 @@ export default function MapDiagram({
 
   const trenchPopup = (trench: Topology["trenches"][number]): string => {
     const { latest: f, observedOnly: obs } = liveRef.current;
+    // plastics are d-series (outer diameter), metallic pipes DN — never
+    // label a PE bore (96.8 mm) as "DN 97"
+    const sizing = trench.material && trench.dn
+      ? (trench.material === "PE" || trench.material === "PVC"
+        ? `${trench.material} d${trench.dn}`
+        : `${trench.material} DN ${trench.dn}`)
+      : `DN ${fmt(trench.inner_diameter_mm, 0)}`;
     const head = `<b>${esc(t("pop.trench", { from: trench.from_node, to: trench.to_node }))}</b>`
-      + `<br><span style="color:var(--muted)">DN ${fmt(trench.inner_diameter_mm, 0)}`
+      + `<br><span style="color:var(--muted)">${sizing}`
       + ` · ${t("pop.length")} ${fmt(trench.length_km * 1000, 0)} m`
       + ` · k ${fmt(trench.k_mm, 2)} mm</span>`;
     if (!f) return `${head}<br>${t("pop.noData")}`;
@@ -190,6 +200,21 @@ export default function MapDiagram({
       + `<br>${row(t("pop.feed"), `${fmt(live.mdot_kg_per_s, 3)} kg/s`)}`;
   };
 
+  const prvPopup = (pid: number, name: string): string => {
+    const { latest: f } = liveRef.current;
+    const head = `<b>${esc(t("tip.prv", { name }))}</b>`;
+    const live = f?.producers.find((p) => p.kind === "prv" && p.id === pid);
+    if (!live) return `${head}<br>${t("pop.noData")}`;
+    const abnormal = live.reducing === false
+      ? `<br><span style="color:#ef4444">⚠ ${t("pop.prvAbnormal")}</span>`
+      : "";
+    return `${head}<br>${row(t("pop.prvIn"), `${fmt(live.p_in_bar, 2)} bar`)} → `
+      + row(t("pop.prvOut"), `${fmt(live.p_out_bar, 2)} bar`)
+      + ` <span style="color:var(--muted)">(${t("pop.prvSet")} ${fmt(live.p_set_bar, 2)})</span>`
+      + `<br>${row(t("pop.mdot"), `${fmt(live.mdot_kg_per_s, 3)} kg/s`)}`
+      + abnormal;
+  };
+
   // ---- build map + static layers ONCE per topology (and language) -----------
 
   useEffect(() => {
@@ -223,6 +248,51 @@ export default function MapDiagram({
       pl.bindTooltip(t("tip.trench", { from: tr.from_node, to: tr.to_node }));
       pl.bindPopup(() => trenchPopup(tr), { autoPan: false });
       trenchRef.current.set(tr.id, pl);
+    }
+
+    // flow-direction arrows: one rotatable glyph per pipe midpoint,
+    // created once, rotated/faded per frame (create-once/restyle)
+    arrowRef.current.clear();
+    bearingRef.current.clear();
+    for (const tr of topo.trenches) {
+      const pts: [number, number][] = tr.geometry.length >= 2
+        ? tr.geometry
+        : ([nodeGeo.get(tr.from_node), nodeGeo.get(tr.to_node)]
+            .filter((p): p is [number, number] => !!p));
+      if (pts.length < 2) continue;
+      const mid = pts[Math.floor((pts.length - 1) / 2)];
+      const nxt = pts[Math.floor((pts.length - 1) / 2) + 1];
+      const midPt: [number, number] = [(mid[0] + nxt[0]) / 2,
+                                       (mid[1] + nxt[1]) / 2];
+      // screen rotation for the "➤" glyph (points east at 0°): CSS rotate
+      // is clockwise, bearing is from north
+      const dLat = nxt[0] - mid[0];
+      const dLon = (nxt[1] - mid[1]) * Math.cos((mid[0] * Math.PI) / 180);
+      const bearing = (Math.atan2(dLon, dLat) * 180) / Math.PI;
+      bearingRef.current.set(tr.id, bearing - 90);
+      const arrow = L.marker(midPt, {
+        icon: L.divIcon({
+          className: "flow-arrow",
+          html: '<span style="display:none">➤</span>',
+          iconSize: [14, 14], iconAnchor: [7, 7],
+        }),
+        interactive: false, keyboard: false,
+      }).addTo(map);
+      arrowRef.current.set(tr.id, arrow);
+    }
+
+    // PRV stations (Druckminderer): violet diamond at the outlet node
+    prvRef.current.clear();
+    for (const v of topo.prvs ?? []) {
+      const pos = nodeGeo.get(v.to_node);
+      if (!pos) continue;
+      const pm = L.circleMarker(pos, {
+        radius: 6, color: "#4c1d95", weight: 1.5,
+        fillColor: "#8b5cf6", fillOpacity: 1,
+      }).addTo(map);
+      pm.bindTooltip(t("tip.prv", { name: v.name }));
+      pm.bindPopup(() => prvPopup(v.id, v.name), { autoPan: false });
+      prvRef.current.set(v.id, pm);
     }
 
     // plain nodes (small, always visible): restyled by the pressure layer;
@@ -303,6 +373,9 @@ export default function MapDiagram({
       mapRef.current = null;
       tileRef.current = null;
       sensorRef.current.clear();
+      arrowRef.current.clear();
+      bearingRef.current.clear();
+      prvRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topo, i18n.language]); // rebuild (incl. tooltips) on language change
@@ -436,6 +509,31 @@ export default function MapDiagram({
       if (cm.isPopupOpen()) {
         const cons = topo.consumers.find((x) => x.id === id);
         if (cons) cm.setPopupContent(consumerPopup(cons));
+      }
+    }
+
+    // flow-direction arrows: rotate with the flow sign, hide when unknown
+    for (const [id, arrow] of arrowRef.current) {
+      const el = arrow.getElement()?.firstElementChild as HTMLElement | null;
+      if (!el) continue;
+      const p = pipeData.get(id);
+      const base = bearingRef.current.get(id) ?? 0;
+      if (!p || p.mdot_kg_per_s == null
+          || Math.abs(p.mdot_kg_per_s) < 1e-6) {
+        el.style.display = "none";
+      } else {
+        el.style.display = "inline-block";
+        const flip = p.mdot_kg_per_s < 0 ? 180 : 0;
+        el.style.transform = `rotate(${base + flip}deg)`;
+      }
+    }
+
+    // PRV popups refresh while open
+    const prvsById = new Map((topo.prvs ?? []).map((v) => [v.id, v]));
+    for (const [id, pm] of prvRef.current) {
+      if (pm.isPopupOpen()) {
+        const v = prvsById.get(id);
+        if (v) pm.setPopupContent(prvPopup(v.id, v.name));
       }
     }
 

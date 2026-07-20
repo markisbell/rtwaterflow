@@ -173,3 +173,84 @@ loader guard dropped (legal in hydraulics; M4 compliance finding);
   bundle schema (§3), pipe catalog DN/material→k defaults, demo bundle
   "Musterdorf" (~40 nodes, tank on hill, two zones via PRV, ring + branch,
   mixed consumers), pressure/velocity/direction layers, Drucklinie view.
+
+### 2026-07-20 — M1: hydraulic core + Musterdorf (branch `m0-fork-strip`)
+
+**Built** (roadmap §6 M1):
+
+- **Pipe catalog** (`pipe_catalog.py`): material → GW 303-1 integral
+  roughness defaults (PE/PVC 0.1, GGG/St/AZ 0.4, GG 1.0 mm); plastics are
+  d-series OUTER diameters with SDR 17 / PN 10 bore tables (PE d110 →
+  96.8 mm), metallic ID ≈ DN. `PipeSpec` resolves dn+material XOR explicit
+  inner_diameter_mm at validation; explicit k always wins; `length_km`
+  derives from the geometry polyline (haversine) when absent.
+- **PRVs** (`PrvSpec` in supply.json → `create_pressure_control` holding
+  p_out at the outlet): static Durchlauf zone boundaries; producer_meta
+  kind `"prv"`; the wire carries honest STATION-SCADA telemetry —
+  `p_set_bar` (config) vs SOLVED `p_out_bar`/`p_in_bar`, SIGNED
+  `mdot_kg_per_s`, and `reducing: false` flags the press_control failure
+  modes (boosting/back-feed) M2 supervision will act on. Loader: PRV edges
+  count for reachability, PRV must be a CUT edge (bypass pipes rejected),
+  geometry ends must anchor to their nodes (≤ 50 m).
+- **Consumer metadata**: `kind` (residential/industry/farm/school/pool/…)
+  + `storeys` ship now — M3 archetypes and M4 per-storey minimum pressure
+  need no bundle rewrite.
+- **Musterdorf** (`scripts/generate_musterdorf.py`, deterministic, output
+  committed + byte-stability-tested): 33 nodes / 32 pipes / 26 consumers /
+  3.885 km in the Odenwald. Hochbehälter Musterberg 420 m (0.4 bar) →
+  Hochzone 363–385 m (branched) → Druckminderer Talstraße (345 m,
+  p_out 2.8 bar) → Tiefzone 303–332 m (ring core incl. legacy GG k=1.0
+  segments + branched fringes). Mixed stock PE/GGG/GG, 1965–2018.
+- **UI**: flow-direction arrows (create-once midpoint glyphs, rotated by
+  polyline bearing ± flow sign, hidden when unknown/measured-view), PRV
+  station marker + popup (In→Out (Soll), ⚠ when not reducing; PE pipes
+  labeled "PE d110", never "DN 97"), **DrucklinieSection** — client-side
+  Dijkstra (trenches + PRV pseudo-edges) → SVG terrain + HGL
+  (elevation + p·10.197 m); the PRV head drop renders as a visible step.
+  `shortestPath` exported + vitest-covered.
+
+**Tests: 105 backend** (x2 back-to-back, zero strays) **+ 22 UI vitest**;
+tsc strict green; API.md regenerated (44 routes unchanged).
+
+**Acceptance evidence (roadmap M1):** Musterdorf converges tier 1, warm
+solves median ~31 ms (< 50 ms bar, pinned as median-of-10); mass balance
+0.0 % (< 0.1 % bar); zone pressures high 3.82–5.94 / low 4.07–6.90 bar with
+both zone MEDIANS inside the 4–6 bar band (pinned); every consumer ≥ 2 and
+≤ 8 bar; v_max 0.39 m/s; PRV holds 2.8 bar passing 2.44 kg/s (pinned incl.
+recorder round-trip); generator byte-stable. Verified live end-to-end:
+Musterdorf applied via /config/apply, 32 arrows rendering, PRV popup with
+honest telemetry, Drucklinie to the farm shows the 47-px PRV step
+(303–424 m over 1.55 km), zero console errors.
+
+**Adversarial review** (3 lenses + per-finding verification, 16 agents):
+13 findings confirmed, 0 refuted — all fixed before commit: signed PRV mdot
++ `reducing` flag + solved p_out (wire honesty), geometry anchoring +
+PRV-cut-edge loader checks, producers.csv PRV columns, PE d-series popup
+labels, NetIndex.prvs default_factory, GET /producers PRV enrichment,
+ring-test ids resolved from the contract (never hardcoded), topology
+prvs/dn/material pinned, musterdorf catalog stats pinned, Dijkstra
+exported + unit-tested, strict-mode station-SCADA doctrine documented +
+pinned.
+
+**Discoveries:**
+
+1. press_control failure modes are REACHABLE on Musterdorf (review-verified
+   empirically): a ~20-25 kg/s fire-flow-scale consumer in the low zone
+   collapses the inlet head and the PRV silently boosts (deltap +2.55 bar,
+   frame "ok"); a bypass pipe yields −121 kg/s reverse valve flow. The M1
+   wire now exposes both (`reducing`/signed mdot); M2 supervision closes
+   the valve.
+2. Wire pipe id == pipes.json row index is the load-bearing invariant for
+   tests — resolve ids from the contract (`pos[(from,to)]`), never
+   hardcode.
+
+**Deviation (documented):** the roadmap's M2 "worst-point service-pressure
+controller" is deferred until a pressure-setpoint actuator exists (DEA,
+M5/M6) — a gravity+PRV net has nothing to actuate; M2 ships tank-level
+hysteresis instead (the canonical German pattern per TF §5).
+
+- Next: **M2 — tanks, pumps, rules** (roadmap §6): WaterTank (ext_grid +
+  level integration, Durchlauf + Gegen variants), pump stations with
+  std_type curves, hysteresis RuleEngine, buffer-time KPI + tank widgets,
+  minimal diurnal demand factor (environment.json) so the sawtooth exists
+  before the M3 demand engine, EPANET/WNTR oracle for the tank trajectory.

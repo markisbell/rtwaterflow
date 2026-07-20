@@ -183,6 +183,7 @@ const de = {
     trench: "Leitung {{from}} → {{to}}",
     consumer: "Abnehmer {{name}}",
     plant: "🏔️ {{name}}",
+    prv: "Druckminderer {{name}}",
     node: "Netzknoten {{name}} ({{elev}} m ü. NN) — Rechtsklick: Messstellen",
   },
 
@@ -196,10 +197,27 @@ const de = {
     feed: "Einspeisung",
     length: "Länge",
     designDemand: "Anschlusswert",
+    prvIn: "Eingang",
+    prvOut: "Ausgang",
+    prvSet: "Soll",
+    prvAbnormal: "nicht druckmindernd — physikalisch unplausibel (M2 schließt)",
     unobserved: "keine Messung — unbekannt",
     noData: "noch keine Live-Daten",
     coldStart: "Standard-Zähler: warte auf das erste 15-min-Fenster",
     windowed: "15-min-Mittelwerte (Standard-Lastgang)",
+  },
+
+  hgl: {
+    heading: "Drucklinie",
+    target: "Pfad zum Abnehmer",
+    targetWorst: "Schlechtpunkt (automatisch)",
+    hgl: "Drucklinie (Gelände + Druckhöhe)",
+    terrain: "Gelände",
+    noData: "kein Pfad / noch keine Live-Daten",
+    hint:
+      "Der Abstand zwischen Drucklinie und Gelände IST der örtliche " +
+      "Versorgungsdruck (10 m ≈ 1 bar). Am Druckminderer springt die " +
+      "Linie sichtbar nach unten.",
   },
 
   live: {
@@ -430,6 +448,7 @@ const en: typeof de = {
     trench: "Pipe {{from}} → {{to}}",
     consumer: "Consumer {{name}}",
     plant: "🏔️ {{name}}",
+    prv: "Pressure-reducing valve {{name}}",
     node: "Network node {{name}} ({{elev}} m a.s.l.) — right-click: sensors",
   },
 
@@ -443,10 +462,27 @@ const en: typeof de = {
     feed: "Feed",
     length: "Length",
     designDemand: "Design demand",
+    prvIn: "Inlet",
+    prvOut: "Outlet",
+    prvSet: "set",
+    prvAbnormal: "not reducing — physically implausible (M2 closes the valve)",
     unobserved: "no measurement — unknown",
     noData: "no live data yet",
     coldStart: "standard meter: waiting for the first 15-min window",
     windowed: "15-min means (standard load profile)",
+  },
+
+  hgl: {
+    heading: "Hydraulic grade line",
+    target: "Path to consumer",
+    targetWorst: "Worst point (automatic)",
+    hgl: "Grade line (terrain + pressure head)",
+    terrain: "Terrain",
+    noData: "no path / no live data yet",
+    hint:
+      "The gap between the grade line and the terrain IS the local " +
+      "service pressure (10 m ≈ 1 bar). At the PRV the line visibly " +
+      "steps down.",
   },
 
   live: {

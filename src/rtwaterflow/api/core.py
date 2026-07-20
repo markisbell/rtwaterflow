@@ -44,9 +44,10 @@ def status() -> dict:
 
 @router.get("/network", summary="Static topology")
 def network() -> dict:
-    """Active network topology: nodes, trenches (shared supply/return geometry
-    + per-side pipe element ids), consumers, producers. Rebuilt per request —
-    equipment CRUD (M4) changes the consumer/producer inventory live."""
+    """Active network topology: nodes (with elevation_m), trenches (single
+    pipe layer, catalog sizing dn/material + geometry), consumers, producers
+    and prvs (Druckminderer branches — zone boundaries). Rebuilt per
+    request — consumer CRUD changes the inventory live."""
     from .runtime import build_topology
     app = get_app()
     return build_topology(app.network_id, app.sim)

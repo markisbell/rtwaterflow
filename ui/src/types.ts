@@ -17,6 +17,8 @@ export interface TopoTrench {
   from_node: string;
   to_node: string;
   length_km: number;
+  dn: number | null;
+  material: string | null;
   inner_diameter_mm: number;
   k_mm: number;
   sections: number;
@@ -28,15 +30,24 @@ export interface TopoConsumer {
   id: number;
   name: string;
   node: string;
-  kind: "consumer";
+  kind: string; // residential | industry | farm | school | ... | consumer
   mdot_demand_kg_per_s: number | null;
 }
 
 export interface TopoProducer {
   id: number; // platform-unique pid
-  kind: "slack";
+  kind: "slack" | "prv";
   name: string;
   node: string;
+}
+
+/** PRV branch (Druckminderer, zone boundary) — edge for the Drucklinie
+ *  path + location for the station marker. */
+export interface TopoPrv {
+  id: number;
+  name: string;
+  from_node: string;
+  to_node: string;
 }
 
 export interface Topology {
@@ -46,6 +57,7 @@ export interface Topology {
   trenches: TopoTrench[];
   consumers: TopoConsumer[];
   producers: TopoProducer[];
+  prvs: TopoPrv[];
   steps_per_day: number;
   n_days: number;
 }
@@ -91,7 +103,7 @@ export interface ConsumerState {
   id: number;
   name: string;
   node: string;
-  kind?: "consumer";
+  kind?: string;
   mdot_demand_kg_per_s: number | null;
   mdot_kg_per_s: number | null;
   p_bar: number | null;
@@ -99,11 +111,21 @@ export interface ConsumerState {
 
 export interface ProducerState {
   id: number;
-  kind: "slack";
+  kind: "slack" | "prv";
   name: string;
   node: string;
   p_bar?: number | null;
+  /** SIGNED through-flow for PRVs (negative = reverse flow through the
+   *  valve); source feed magnitude for the slack. */
   mdot_kg_per_s?: number | null;
+  // PRV (Druckminderer): setpoint (config) vs solved in/out (telemetry)
+  p_set_bar?: number | null;
+  p_out_bar?: number | null;
+  p_in_bar?: number | null;
+  /** false = the static press_control is NOT reducing (boosting or
+   *  back-feeding — physically impossible for a real PRV; M2 supervision
+   *  closes the valve then). Honest abnormality flag on the wire. */
+  reducing?: boolean;
 }
 
 export interface StepSummary {

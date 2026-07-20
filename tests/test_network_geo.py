@@ -17,6 +17,9 @@ EXPECTED_BBOX = {
     # Odenwald hillside near Eberbach: hilly terrain matching the fixture's
     # 346-400 m elevations
     "tutorial_hillside": (49.40, 49.52, 8.90, 9.06),
+    # Musterdorf: the fictional two-zone village, same Odenwald region
+    # (302-420 m elevations need real hills under them)
+    "musterdorf": (49.44, 49.47, 8.99, 9.02),
 }
 
 

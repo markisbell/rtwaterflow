@@ -31,6 +31,11 @@ def _producer_list(app: App) -> list[dict]:
                  "name": meta["name"], "node": meta["node"]}
         if meta["kind"] == "slack":
             entry["p_bar"] = _r(net.ext_grid.at[meta["element"], "p_bar"])
+        elif meta["kind"] == "prv":
+            # configuration view (the wire carries the live telemetry)
+            entry["from_node"] = meta.get("from_node")
+            entry["p_set_bar"] = _r(net.press_control.at[
+                meta["element"], "controlled_p_bar"])
         out.append(entry)
     return out
 

@@ -61,6 +61,9 @@ class NetIndex:
     # plus the pandapipes "element" index within the kind's own table.
     ext_grid: int              # ext_grid table index of the slack
     ext_grid_node: str
+    # pressure-reducing valves (press_control elements, zone boundaries)
+    prvs: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype=np.int64))
     producer_meta: list[dict] = field(default_factory=list)
     # per-consumer kind (future: hydrant/leak emitters share the sink table)
     consumer_kinds: list[str] = field(default_factory=list)
@@ -111,13 +114,14 @@ def build_network(
         junction[j.name] = jj
         junction_names.append(j.name)
 
-    # --- pipes: one per entry, explicit k_mm, no thermal parameters ---
+    # --- pipes: one per entry, explicit k_mm (resolved by the contract:
+    # catalog dn/material or explicit values), no thermal parameters ---
     pipe_idx: list[int] = []
     for i, p in enumerate(inputs.pipes.pipes):
         pi = pp.create_pipe_from_parameters(
             net, junction[p.from_node], junction[p.to_node],
-            length_km=p.length_km, inner_diameter_mm=p.inner_diameter_mm,
-            k_mm=p.k_mm, sections=p.sections, name=f"pipe{i}")
+            length_km=float(p.length_km), inner_diameter_mm=float(p.inner_diameter_mm),
+            k_mm=float(p.k_mm), sections=p.sections, name=f"pipe{i}")
         pipe_idx.append(pi)
 
     # --- consumers: sinks with fixed demand (M0) ---
@@ -140,17 +144,34 @@ def build_network(
     producer_meta = [{"pid": 0, "kind": "slack", "element": eg,
                       "node": slack.node, "name": name}]
 
+    # --- pressure-reducing valves (Druckminderer): press_control holding
+    # p_out_bar at the outlet junction — the static zone boundary (M1;
+    # runtime supervision arrives with the M2 zone controllers) ---
+    prv_idx: list[int] = []
+    for v in inputs.supply.prvs:
+        vname = v.name or f"prv_{v.from_node}_{v.to_node}"
+        pc = pp.create_pressure_control(
+            net, from_junction=junction[v.from_node],
+            to_junction=junction[v.to_node],
+            controlled_junction=junction[v.to_node],
+            controlled_p_bar=float(v.p_out_bar), name=vname)
+        prv_idx.append(pc)
+        producer_meta.append({"pid": len(producer_meta), "kind": "prv",
+                              "element": int(pc), "node": v.to_node,
+                              "from_node": v.from_node, "name": vname})
+
     index = NetIndex(
         consumers=np.asarray(consumer_idx, dtype=np.int64),
         consumer_names=[c.name or f"consumer_{c.node}" for c in consumers],
         consumer_nodes=[c.node for c in consumers],
-        consumer_kinds=["consumer"] * len(consumers),
+        consumer_kinds=[c.kind for c in consumers],
         junction=junction,
         junction_names=junction_names,
         init_pn_bar=net.junction["pn_bar"].to_numpy(copy=True),
         pipes=np.asarray(pipe_idx, dtype=np.int64),
         ext_grid=eg,
         ext_grid_node=slack.node,
+        prvs=np.asarray(prv_idx, dtype=np.int64),
         producer_meta=producer_meta,
     )
     profiles = ProfileArrays(

@@ -64,7 +64,8 @@ _ELEMENT_FILES = (
      ("id", "name", "node", "kind", "mdot_demand_kg_per_s", "mdot_kg_per_s",
       "p_bar")),
     ("producers", "producers.csv",
-     ("id", "kind", "name", "node", "p_bar", "mdot_kg_per_s")),
+     ("id", "kind", "name", "node", "p_bar", "mdot_kg_per_s",
+      "p_set_bar", "p_out_bar", "p_in_bar", "reducing")),
 )
 # the Gemessen layer (measurements.consumers / measurements.nodes lists)
 _MEAS_FILES = (

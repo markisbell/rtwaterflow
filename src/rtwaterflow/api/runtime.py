@@ -138,12 +138,21 @@ def build_topology(network_id: str, sim: Simulator) -> dict:
             "from_node": p.from_node,
             "to_node": p.to_node,
             "length_km": p.length_km,
+            "dn": p.dn,
+            "material": p.material,
             "inner_diameter_mm": p.inner_diameter_mm,
             "k_mm": p.k_mm,
             "sections": p.sections,
             "geometry": geometry,  # [[lat, lon], ...] — WGS84, Leaflet-native
             "pipe": int(idx.pipes[i]),
         })
+    # PRV branches (zone boundaries) — the UI needs their edges for the
+    # Drucklinie path and their location for the station marker
+    prvs = [
+        {"id": int(m["pid"]), "name": m["name"],
+         "from_node": m["from_node"], "to_node": m["node"]}
+        for m in idx.producer_meta if m["kind"] == "prv"
+    ]
     consumers = [
         {"id": int(idx.consumers[i]), "name": idx.consumer_names[i],
          "node": idx.consumer_nodes[i],
@@ -164,6 +173,7 @@ def build_topology(network_id: str, sim: Simulator) -> dict:
         "trenches": trenches,
         "consumers": consumers,
         "producers": producers,
+        "prvs": prvs,
         "steps_per_day": sim.profiles.steps_per_day,
         "n_days": sim.profiles.n_days,
     }

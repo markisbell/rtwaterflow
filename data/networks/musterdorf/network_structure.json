@@ -1,0 +1,335 @@
+{
+ "name": "Musterdorf",
+ "junctions": [
+  {
+   "name": "hb",
+   "kind": "source",
+   "geo": [
+    49.46,
+    9.0
+   ],
+   "elevation_m": 420.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "z1",
+   "kind": "node",
+   "geo": [
+    49.4593,
+    9.0012
+   ],
+   "elevation_m": 403.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h1",
+   "kind": "node",
+   "geo": [
+    49.4585,
+    9.0022
+   ],
+   "elevation_m": 385.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h2",
+   "kind": "consumer",
+   "geo": [
+    49.4578,
+    9.0035
+   ],
+   "elevation_m": 378.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h3",
+   "kind": "consumer",
+   "geo": [
+    49.4571,
+    9.0048
+   ],
+   "elevation_m": 372.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h4",
+   "kind": "node",
+   "geo": [
+    49.4563,
+    9.006
+   ],
+   "elevation_m": 368.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h5",
+   "kind": "consumer",
+   "geo": [
+    49.4585,
+    9.0043
+   ],
+   "elevation_m": 375.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h6",
+   "kind": "consumer",
+   "geo": [
+    49.459,
+    9.0055
+   ],
+   "elevation_m": 370.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h7",
+   "kind": "consumer",
+   "geo": [
+    49.4595,
+    9.0068
+   ],
+   "elevation_m": 366.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h8",
+   "kind": "consumer",
+   "geo": [
+    49.4564,
+    9.004
+   ],
+   "elevation_m": 380.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h9",
+   "kind": "consumer",
+   "geo": [
+    49.4557,
+    9.0033
+   ],
+   "elevation_m": 383.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h10",
+   "kind": "consumer",
+   "geo": [
+    49.4596,
+    9.0047
+   ],
+   "elevation_m": 373.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "h11",
+   "kind": "consumer",
+   "geo": [
+    49.4602,
+    9.0075
+   ],
+   "elevation_m": 363.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "dm_i",
+   "kind": "node",
+   "geo": [
+    49.455,
+    9.0075
+   ],
+   "elevation_m": 345.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "dm_o",
+   "kind": "node",
+   "geo": [
+    49.4549,
+    9.0076
+   ],
+   "elevation_m": 345.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r1",
+   "kind": "node",
+   "geo": [
+    49.4543,
+    9.0085
+   ],
+   "elevation_m": 332.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r2",
+   "kind": "consumer",
+   "geo": [
+    49.4536,
+    9.0098
+   ],
+   "elevation_m": 326.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r3",
+   "kind": "consumer",
+   "geo": [
+    49.4529,
+    9.0111
+   ],
+   "elevation_m": 320.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r4",
+   "kind": "consumer",
+   "geo": [
+    49.4521,
+    9.0123
+   ],
+   "elevation_m": 314.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r5",
+   "kind": "consumer",
+   "geo": [
+    49.4513,
+    9.0135
+   ],
+   "elevation_m": 309.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r6",
+   "kind": "consumer",
+   "geo": [
+    49.4506,
+    9.0122
+   ],
+   "elevation_m": 306.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r7",
+   "kind": "consumer",
+   "geo": [
+    49.451,
+    9.0105
+   ],
+   "elevation_m": 310.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r8",
+   "kind": "consumer",
+   "geo": [
+    49.4517,
+    9.0092
+   ],
+   "elevation_m": 316.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r9",
+   "kind": "consumer",
+   "geo": [
+    49.4525,
+    9.008
+   ],
+   "elevation_m": 322.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "r10",
+   "kind": "consumer",
+   "geo": [
+    49.4534,
+    9.0072
+   ],
+   "elevation_m": 328.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "b1",
+   "kind": "consumer",
+   "geo": [
+    49.4534,
+    9.0122
+   ],
+   "elevation_m": 317.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "b2",
+   "kind": "consumer",
+   "geo": [
+    49.4526,
+    9.0135
+   ],
+   "elevation_m": 311.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "b3",
+   "kind": "consumer",
+   "geo": [
+    49.4497,
+    9.014
+   ],
+   "elevation_m": 303.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "b4",
+   "kind": "consumer",
+   "geo": [
+    49.4498,
+    9.011
+   ],
+   "elevation_m": 305.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "b5",
+   "kind": "consumer",
+   "geo": [
+    49.4503,
+    9.009
+   ],
+   "elevation_m": 309.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "b6",
+   "kind": "consumer",
+   "geo": [
+    49.4512,
+    9.007
+   ],
+   "elevation_m": 313.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "b7",
+   "kind": "consumer",
+   "geo": [
+    49.453,
+    9.006
+   ],
+   "elevation_m": 325.0,
+   "pn_bar": 3.0
+  },
+  {
+   "name": "b8",
+   "kind": "consumer",
+   "geo": [
+    49.4542,
+    9.006
+   ],
+   "elevation_m": 331.0,
+   "pn_bar": 3.0
+  }
+ ]
+}

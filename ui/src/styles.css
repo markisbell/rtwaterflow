@@ -298,3 +298,11 @@ button.ghost {
 .leaflet-popup-content { font-size: 0.8rem; line-height: 1.45; margin: 10px 12px; }
 .leaflet-popup-content b { font-size: 0.84rem; }
 .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+
+/* flow-direction arrows on the map (M1) */
+.flow-arrow span {
+  font-size: 11px;
+  color: #17202b;
+  text-shadow: 0 0 2px #fff, 0 0 4px #fff;
+  transition: transform 0.4s ease;
+}
