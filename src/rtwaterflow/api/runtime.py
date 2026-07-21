@@ -110,6 +110,7 @@ def recording_meta(app: App | None = None) -> dict:
         "network": app.active,
         "measurements": sim.measurement_placement(),
         "estimation": sim.est_config.as_dict(),
+        "environment": sim.environment.as_dict(),   # M3 weather overrides
         "engine": status_payload(app),
         "expose_ground_truth": bool(app.settings.expose_ground_truth),
     }
@@ -159,12 +160,22 @@ def build_topology(network_id: str, sim: Simulator) -> dict:
          "from_node": m["from_node"], "to_node": m["node"]}
         for m in idx.producer_meta if m["kind"] == "station"
     ]
+    # design demand (Anschlusswert) = the SPEC's mean base value, matched
+    # by build name — NOT the tick-0 engine profile (which since M3 bakes
+    # shape × day factor × noise and would shift with every weather
+    # override; M3 review finding). Runtime-added consumers carry their
+    # constant demand from the (flat) profile row.
+    base_by_name = {
+        (c.name or f"consumer_{c.node}"): float(c.mdot_kg_per_s)
+        for c in inputs.consumers.consumers}
     consumers = [
         {"id": int(idx.consumers[i]), "name": idx.consumer_names[i],
          "node": idx.consumer_nodes[i],
          "kind": (idx.consumer_kinds[i] if idx.consumer_kinds else "consumer"),
-         "mdot_demand_kg_per_s": float(sim.profiles.mdot_kg_per_s[i, 0])
-         if i < sim.profiles.mdot_kg_per_s.shape[0] else None}
+         "mdot_demand_kg_per_s": base_by_name.get(
+             idx.consumer_names[i],
+             float(sim.profiles.mdot_kg_per_s[i, 0])
+             if i < sim.profiles.mdot_kg_per_s.shape[0] else None)}
         for i in range(len(idx.consumers))
     ]
     producers = [

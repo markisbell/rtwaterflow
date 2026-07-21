@@ -145,19 +145,50 @@ class PipesFile(_StrictModel):
 # consumers.json
 # ---------------------------------------------------------------------------
 
+class ConsumerSize(_StrictModel):
+    """Archetype sizing (roadmap §3 consumers.json): drives the M3 demand
+    profiles' peak structure and the W 410 aggregate validation. The
+    fields are per-archetype alternatives — at least ONE must be set (an
+    empty ``size: {}`` would silently flip the consumer from the bit-exact
+    legacy path onto archetype shaping; M3 review finding)."""
+
+    population: Optional[int] = Field(default=None, gt=0)
+    employees: Optional[int] = Field(default=None, gt=0)
+    pupils: Optional[int] = Field(default=None, gt=0)
+    beds: Optional[int] = Field(default=None, gt=0)
+    animals: Optional[int] = Field(default=None, gt=0)
+    visitors_design: Optional[int] = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _at_least_one(self) -> "ConsumerSize":
+        if not any(v is not None for v in (
+                self.population, self.employees, self.pupils, self.beds,
+                self.animals, self.visitors_design)):
+            raise ValueError(
+                "consumer size: at least one field required (population/"
+                "employees/pupils/beds/animals/visitors_design) — an empty "
+                "size object would still switch the consumer onto the "
+                "archetype demand path")
+        return self
+
+
 class ConsumerSpec(_StrictModel):
-    """One consumer = one ``sink`` element (fixed demand until the M3
-    demand engine). ``kind`` and ``storeys`` are carried now so the M3
-    archetype profiles and the M4 compliance checks (W 400-1 minimum
-    pressure = 2.0 + 0.35 bar per storey above ground) need no bundle
-    rewrite."""
+    """One consumer = one ``sink`` element. ``mdot_kg_per_s`` is the MEAN
+    base demand; since M3 the demand engine shapes it with the archetype's
+    diurnal/weekly/seasonal/weather profile (``kind`` + ``size``). The M1
+    generic kinds stay legal and map to defaults (residential → village,
+    farm → dairy). ``storeys`` feeds the M4 W 400-1 minimum-pressure check
+    (2.0 + 0.35 bar per storey)."""
 
     node: str
     name: Optional[str] = None
     mdot_kg_per_s: float = Field(gt=0)
-    kind: Literal["residential", "industry", "farm", "school", "office",
-                  "hospital", "pool", "other"] = "residential"
+    kind: Literal[
+        "residential", "residential_city", "residential_village",
+        "industry", "farm", "farm_dairy", "farm_pigs",
+        "school", "office", "hospital", "pool", "other"] = "residential"
     storeys: int = Field(default=1, ge=1, le=8)
+    size: Optional[ConsumerSize] = None
 
 
 class ConsumersFile(_StrictModel):
@@ -362,14 +393,29 @@ class EnvironmentFile(_StrictModel):
     the M3 demand engine couples it to irrigation/pool/livestock demand).
 
     ``demand_factor`` is the M2 interim diurnal modulation: a global
-    multiplicative factor per step applied to every consumer's base demand
-    (night valley, morning/evening peaks) so tank sawtooth dynamics exist
-    before the M3 archetype profiles replace it."""
+    multiplicative factor per step applied to every consumer's base demand.
+    Since M3 it is the LEGACY fallback — bundles whose consumers carry
+    archetype ``size`` data get engine-generated per-consumer profiles
+    instead (demand/engine.py).
+
+    M3 drivers:
+
+    * ``day_types`` — one label per day of the horizon; defaults to a
+      Monday-anchored week (day i % 7 → Mo..So).
+    * ``dryness`` — one 0..1 drought index per day (irrigation trigger).
+    * ``season_day_of_year`` — calendar anchor of day 0 (pool season,
+      seasonal factor); default 1 (January 1st).
+    """
 
     resolution_minutes: int = Field(gt=0)
     steps: int = Field(gt=0)
     t_air_c: list[float]
     demand_factor: Optional[list[float]] = None
+    day_types: Optional[list[Literal["workday", "saturday", "sunday"]]] = None
+    dryness: Optional[list[float]] = None
+    #: capped at 365: the engine runs an idealized 365-day year (the %365
+    #: doy wrap would fold 366 onto January 1st — M3 review finding)
+    season_day_of_year: int = Field(default=1, ge=1, le=365)
 
     @model_validator(mode="after")
     def _lengths(self) -> "EnvironmentFile":
@@ -384,4 +430,17 @@ class EnvironmentFile(_StrictModel):
                     f"{len(self.demand_factor)} != steps {self.steps}")
             if any(f <= 0 for f in self.demand_factor):
                 raise ValueError("environment.demand_factor: factors must be > 0")
+        total_min = self.steps * self.resolution_minutes
+        n_days = max(1, total_min // (24 * 60))
+        if self.day_types is not None and len(self.day_types) != n_days:
+            raise ValueError(
+                f"environment.day_types: length {len(self.day_types)} != "
+                f"{n_days} horizon days")
+        if self.dryness is not None:
+            if len(self.dryness) != n_days:
+                raise ValueError(
+                    f"environment.dryness: length {len(self.dryness)} != "
+                    f"{n_days} horizon days")
+            if any(not 0.0 <= d <= 1.0 for d in self.dryness):
+                raise ValueError("environment.dryness: values must be in [0, 1]")
         return self

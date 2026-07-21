@@ -54,9 +54,14 @@ are STALE fork-parent documents kept for platform-architecture reference only.
   `mass_storage` does nothing hydraulically. No parallel pump branches
   (upstream issue #693). `press_control` has no PRV state machine — always
   pair with supervisory logic (M2 zones).
-- Retry ladder: 3 tiers (colebrook n → colebrook 3n → nikuradse 3n =
-  "degraded"); the tier count is pinned in `tests/test_retry_ladder.py` AND
-  the poison count of `tests/test_nonconvergence.py` — change in lockstep.
+- Retry ladder: 4 tiers since M3 (colebrook n → colebrook 3n →
+  swamee-jain 3n = "degraded" → nikuradse 3n = "degraded"); swamee-jain is
+  the explicit Colebrook approximation and rescues transitional-Reynolds
+  ticks the implicit model's Newton cannot solve. Tier count pinned in
+  `tests/test_retry_ladder.py` AND the poison count of
+  `tests/test_nonconvergence.py` — change in lockstep. Colebrook tiers pass
+  `max_iter_colebrook` 100/300 (upstream inner default of 10 fails on
+  near-stagnant stubs).
 - Sibling port scheme: netzsim 8000/5173 · rtheatflow 8001/5174 ·
   **rtwaterflow 8002/5175** (compose host ports 8002/8082/8088/3002).
   `stop_rtwaterflow.bat` matches window titles and the `rtwaterflow.main`
@@ -346,8 +351,89 @@ around a Pumpwerk) until check-valved bypass piping exists (M5 emitters/
 valves); EPANET-style sub-tick rule timing is deliberately NOT emulated
 (15-min SCADA switching is the teaching model).
 
-- Next: **M3 — demand engine** (roadmap §6): archetype profiles
-  (residential city/village, industry shifts, school, farm milking pulses
-  + temperature coupling, pool season/backwash), W 410 fd/fh aggregate
-  validation ±20 %, weather override knob, per-consumer profile plumbing
-  replacing the global demand_factor.
+### 2026-07-21 — M3: demand engine (branch `m0-fork-strip`)
+
+**Built** (roadmap §6 M3, §4.8; every number from TF §6):
+
+- **Contract**: ConsumerSpec gains archetype kinds (residential_city/
+  _village, farm_dairy/_pigs; M1 generics alias residential→village,
+  farm→dairy) + `size` (population/employees/pupils/beds/animals/
+  visitors_design — ≥ 1 field required, an empty object is rejected);
+  EnvironmentFile gains `day_types` (per horizon day, default
+  Monday-anchored week), `dryness` (0..1 per day) and
+  `season_day_of_year` (1..365 — the engine runs an idealized 365-day
+  year). `demand_factor` is the legacy fallback.
+- **demand/ package**: archetypes.py (hand-tuned 24 h shapes normalized
+  to mean 1.0: village/city residential incl. weekend behavior, industry
+  shift block, school pulses, office, hospital, dairy milking pulses
+  05–07/16–18 with temperature coupling capped 2× at ~29 °C, pigs, pool
+  with May–Sept season, visitor-weather coupling and the nightly 02:00
+  DIN 19643 backwash pulse) + engine.py (`build_demand_profiles`:
+  [n_cons, T] = base × shape (hourly → tick linear interp, wrap-around)
+  × day factor (day type × season ± 8 % × temperature) + the 2018 hot-dry
+  irrigation surge (Tmax ≥ 28 °C AND dryness ≥ 0.5: evening block 19–21 h
+  + elevated night flows, roughly doubling extreme-day volume) × seeded
+  noise (crc32(name) — stable across processes; hash() is salted)).
+  Consumers WITHOUT size take the legacy path bit-exactly.
+- **W 410 validation** (demand/w410.py + tests): a synthetic year over
+  the Musterdorf population (E = 1577) lands within ±20 % of
+  fd = 3.9·E^−0.0752 and fh = 18.1·E^−0.1682 — validation TARGETS, never
+  inputs (the small-area overestimation is the documented teaching note).
+- **Retry ladder → 4 tiers**: colebrook n (max_iter_colebrook=100) →
+  colebrook 3n (300) → **swamee-jain 3n** ("degraded", explicit Colebrook
+  approximation) → nikuradse 3n ("degraded", #803). Discovery: the noisy
+  M3 demands park several pipes at transitional Re (1700–3800) on ~2 % of
+  ticks — the implicit Colebrook Newton flip-flops across the laminar/
+  turbulent switch there while swamee-jain (no inner Newton) converges;
+  the upstream inner-lambda default of 10 iterations also failed
+  near-stagnant stubs (fixed via max_iter_colebrook). The swamee-jain
+  divide-by-zero at Re = 0 is silenced via np.errstate (benign λ→0).
+- **Weather knob**: `Simulator.set_environment` (t_offset_c,
+  dryness_override) rebuilds profiles BY CONSUMER IDENTITY (build-name
+  matching — positional writes after runtime CRUD corrupted rows;
+  review-critical) + GET/POST /environment (49 routes; never-500
+  guarded); scenario recipes save/replay the overrides;
+  `reset_operations` normalizes them like station modes (one doctrine);
+  recording metadata.json records them (reproducibility recipe).
+- **Bundles**: musterdorf regenerated as the archetype showcase (sizes on
+  all 26 consumers, mid-July summer day 12–26 °C, dryness 0.3,
+  demand_factor dropped; day volume ≈ 288 m³); mustertal +
+  tutorial_hillside deliberately stay legacy-path bundles.
+- **Wire/topology honesty**: GET /network Anschlusswert = the spec's MEAN
+  base demand (matched by build name), never the tick-0 engine value.
+- **UI**: EnvironmentSection (live t_air, Normal/Hitzetag segment with
+  three-way state incl. "custom override" honesty, write-sequence guard
+  against the 5 s poll race, 🔥 badge, legacy note), ConsumerTableSection
+  (archetype icons, Soll/Ist m³/h via M3H_PER_KG_S, pressure-colored,
+  measured-view = metered-only with honest "—" demanded), all seven
+  Leaflet tooltips esc()'d (stored-XSS via imported bundle names —
+  popups already escaped since M0), remaining ×3.6 conversions replaced
+  by M3H_PER_KG_S (consumer popup, Overview).
+
+**Tests: 155 backend ×2 + 23 vitest**; tsc strict + vite build green;
+API.md regenerated (49 routes). Warm-solve bar consciously re-pinned
+50 → 80 ms (review-verified: the pristine M2 commit also medians ~50 ms
+on this host today — ambient machine load, not a regression; 80 ms keeps
+> 12× real-time headroom).
+
+**Acceptance evidence (roadmap M3):** synthetic year fd 1.9–2.1 /
+fh in-corridor vs W 410 for E = 1577 (±20 % pinned); Hitzetag
+(t_offset +6, dryness 0.9) shifts the aggregate peak to 19:45 at > 1.5×
+the normal peak with elevated night flows; the pool backwash pulse is
+visible in the Hochbehälter drawdown (pinned on the tank wire mdot);
+profiles deterministic; legacy bundles bit-exact. Live E2E: Umwelt
+section round-trips Hitzetag (incl. while paused), 26-row consumer table
+with archetype icons, zero console errors.
+
+**Adversarial review** (3 lenses + per-finding verification, 20 agents):
+15 confirmed / 2 refuted — all fixed + regression-pinned before commit:
+the identity-rebuild critical (consumer CRUD + POST /environment = 500 or
+silently cross-wired demands), metadata.json environment block, replay
+normalization doctrine, topology Anschlusswert, tooltip XSS, empty-size
+and doy-366 contract holes, dryness-null docstring, hot-state derivation,
+poll race, ρ-1000 stragglers, errstate, warm-solve re-pin.
+
+- Next: **M4 — compliance engine + alarms** (roadmap §6, §4.9): typed
+  findings with German rule citations (W 400-1 storey pressures, > 8 bar
+  rest, velocity/stagnation, tank reserves/turnover, W 405 fire checks),
+  alarm center + traffic-light overlay, seeded violation fixtures.

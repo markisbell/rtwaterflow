@@ -2,6 +2,7 @@ import type {
   ActiveConfig,
   ApplyResponse,
   EngineStatus,
+  EnvironmentInfo,
   EstimationConfigInfo,
   ExportStatus,
   MeasurementsResponse,
@@ -70,6 +71,14 @@ export const api = {
   setStationMode: (name: string, mode: StationMode) =>
     post<{ name: string; mode: StationMode }>(
       `/station/${encodeURIComponent(name)}`, { mode }),
+
+  // ---- environment / weather knob (M3) ----
+  environment: () => get<EnvironmentInfo>("/environment"),
+  setEnvironment: (body: {
+    t_offset_c?: number;
+    dryness?: number;
+    clear_dryness?: boolean;
+  }) => post<EnvironmentInfo>("/environment", body),
 
   // ---- consumers (M0: fixed demand) ----
   addConsumer: (body: {

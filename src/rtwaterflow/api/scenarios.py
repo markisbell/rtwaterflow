@@ -57,6 +57,7 @@ def scenarios_save(req: ScenarioSaveRequest) -> dict:
         "description": req.description.strip(),
         "network_id": app.active.get("network_id", app.network_id),
         "stations": dict(sim.station_modes),   # operator overrides (config)
+        "environment": sim.environment.as_dict(),   # M3 weather overrides
         "consumer_ops": list(sim.consumer_ops),
         # sensor placement: meters are stored by consumer NAME (element ids
         # shift across replay; the consumer-op replay recreates the same
@@ -112,6 +113,17 @@ async def scenarios_load(sid: str) -> dict:
         elif sname not in sim.station_modes:
             log.warning("scenario '%s': no station '%s' for its mode", sid,
                         sname)
+
+    # 1c) environment overrides (M3 weather knob — config, tolerant)
+    env = doc.get("environment") or {}
+    if env:
+        try:
+            sim.set_environment(
+                t_offset_c=float(env.get("t_offset_c") or 0.0),
+                dryness_override=env.get("dryness_override"))
+        except Exception:  # noqa: BLE001
+            log.warning("scenario '%s': skipped environment overrides %s",
+                        sid, env)
 
     # 2) runtime consumer ops, tolerant per entry
     for op in doc.get("consumer_ops", []):

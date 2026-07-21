@@ -26,8 +26,14 @@ from .assets.tank import WaterTank
 from .config import Settings, get_settings
 from .control.rules import HysteresisRule, RuleEngine
 from .estimator import EstimationConfig, ForwardObserver
+from .demand import EnvironmentState, build_demand_profiles
 from .net_inputs import NetInputs
-from .network_builder import RHO_KG_M3, ProfileArrays, build_network
+from .network_builder import (
+    RHO_KG_M3,
+    ProfileArrays,
+    _resample_staircase,
+    build_network,
+)
 from .sensors import WINDOW_MINUTES, MeasurementSet, _r
 
 log = logging.getLogger(__name__)
@@ -73,11 +79,27 @@ class StepResult:
 
 def retry_attempts(iter_base: int) -> list[dict]:
     """The hydraulic ladder. ``RTWATERFLOW_SOLVER_ITER`` is the base ``iter``
-    of tier 1; tiers 2 and 3 use 3x (single-knob semantics)."""
+    of tier 1; the retries use 3x (single-knob semantics).
+
+    ``max_iter_colebrook`` raises the INNER Colebrook-White lambda Newton
+    above the upstream default of 10 — near-stagnant stubs (noisy M3 night
+    demands, laminar Re) otherwise fail the lambda iteration and needlessly
+    drop healthy ticks off the primary model (runtime-verified: 4/96
+    Musterdorf ticks at default, 2 at 100).
+
+    Tier 3 is ``swamee-jain`` (M3): the EXPLICIT Colebrook approximation
+    (~1–3 % on λ, no inner Newton) converges on transitional-Reynolds
+    states (several pipes at Re 1700–3800) where the implicit model's
+    outer Newton flip-flops across the laminar/turbulent switch —
+    runtime-verified on Musterdorf's M3 demand profiles. Honest but far
+    closer to the primary model than the nikuradse last resort (#803)."""
     n = int(iter_base)
     return [
-        dict(mode="hydraulics", iter=n, friction_model="colebrook"),
-        dict(mode="hydraulics", iter=3 * n, friction_model="colebrook"),
+        dict(mode="hydraulics", iter=n, friction_model="colebrook",
+             max_iter_colebrook=100),
+        dict(mode="hydraulics", iter=3 * n, friction_model="colebrook",
+             max_iter_colebrook=300),
+        dict(mode="hydraulics", iter=3 * n, friction_model="swamee-jain"),
         dict(mode="hydraulics", iter=3 * n, friction_model="nikuradse"),
     ]
 
@@ -117,7 +139,13 @@ def solve_with_retry(net, iter_base: int = 100) -> SolveOutcome:
     attempts = retry_attempts(iter_base)
     for tier, kwargs in enumerate(attempts, start=1):
         try:
-            pipeflow(net, **kwargs)
+            # swamee-jain evaluates 5.74/Re^0.9 vectorized — Re = 0 on
+            # zero-flow pipes raises a benign numpy divide warning (λ term
+            # → 0 in the pressure-loss product). Silence it at the numpy
+            # level so warnings-as-errors CI cannot knock out the tier
+            # (M3 review finding).
+            with np.errstate(divide="ignore"):
+                pipeflow(net, **kwargs)
         except PipeflowNotConverged as exc:
             errors.append(f"tier {tier} {kwargs}: not converged ({exc})")
             continue
@@ -127,6 +155,11 @@ def solve_with_retry(net, iter_base: int = 100) -> SolveOutcome:
         ms = (time.perf_counter() - t0) * 1000.0
         if kwargs["friction_model"] == "colebrook":
             return SolveOutcome(True, "ok", tier, ms)
+        if kwargs["friction_model"] == "swamee-jain":
+            return SolveOutcome(
+                True, "degraded", tier, ms,
+                error="swamee-jain friction fallback: explicit Colebrook "
+                      "approximation (transitional-flow tick)")
         return SolveOutcome(
             True, "degraded", tier, ms,
             error="nikuradse friction fallback: low-Re friction biased "
@@ -264,6 +297,9 @@ class Simulator:
     def __init__(self, inputs: NetInputs, settings: Settings | None = None):
         self.settings = settings or get_settings()
         self.inputs = inputs
+        #: runtime weather overrides (config, scenario-saved) — the demand
+        #: engine rebuilds the profiles from them (set_environment)
+        self.environment = EnvironmentState()
         self.net, self.profiles = build_network(
             inputs, steps_per_day=self.settings.steps_per_day)
         self.index = self.profiles.index
@@ -420,13 +456,12 @@ class Simulator:
 
     def _apply_step(self, tick: int) -> None:
         """demand → tank heads → operating rules (all pre-solve inputs;
-        the M3 demand engine and M5 PDA/emitters extend this seam)."""
-        # consumer demand: base × the diurnal factor (M2 interim; the M3
-        # archetype profiles replace the global factor)
+        the M5 PDA/emitters extend this seam)."""
+        # consumer demand: the M3 engine profiles carry the full archetype
+        # (or legacy demand_factor) modulation — plain column read
         if len(self.index.consumers):
             self.net.sink.loc[self.index.consumers, "mdot_kg_per_s"] = (
-                self.profiles.mdot_kg_per_s[:, tick]
-                * float(self.profiles.demand_factor[tick]))
+                self.profiles.mdot_kg_per_s[:, tick])
         # tank heads from the integrated levels
         for tank in self.tanks:
             tank.write_p(self.net)
@@ -643,6 +678,48 @@ class Simulator:
         payload["controls"] = self._controls_dict()
         return payload
 
+    # -- environment overrides (M3 weather knob) --------------------------------
+
+    def set_environment(self, t_offset_c: float | None = None,
+                        dryness_override: object = ...) -> dict:
+        """Apply runtime weather overrides and rebuild the demand profiles.
+
+        Configuration, not physics state (scenario recipes save it): a
+        temperature offset on the bundle's series and an optional dryness
+        override (None clears back to the bundle's values). Runtime-added
+        consumers keep their constant demand — only bundle consumers carry
+        archetype profiles."""
+        if t_offset_c is not None:
+            self.environment.t_offset_c = float(t_offset_c)
+        if dryness_override is not ...:
+            self.environment.dryness_override = (
+                None if dryness_override is None else float(dryness_override))
+        self._rebuild_demand_profiles()
+        return self.environment.as_dict()
+
+    def _rebuild_demand_profiles(self) -> None:
+        """Rebuild engine profiles BY CONSUMER IDENTITY, never by position:
+        runtime CRUD deletes/appends profile rows positionally while
+        inputs.consumers stays immutable — a positional write after a
+        removal crashed (broadcast ValueError → 500) or silently shifted
+        every later consumer onto its neighbour's archetype profile (M3
+        review, critical). Bundle consumers are matched by their build
+        name; removed ones are skipped; runtime-added rows keep their
+        constant demand untouched."""
+        fresh = build_demand_profiles(
+            self.inputs, self.settings.steps_per_day, env=self.environment)
+        bundle_row = {
+            (c.name or f"consumer_{c.node}"): bi
+            for bi, c in enumerate(self.inputs.consumers.consumers)}
+        for pos, name in enumerate(self.index.consumer_names):
+            bi = bundle_row.get(name)
+            if bi is not None:
+                self.profiles.mdot_kg_per_s[pos, :] = fresh[bi]
+        self.profiles.t_air_c = (
+            _resample_staircase(self.inputs.environment.t_air_c,
+                                self.profiles.steps)
+            + self.environment.t_offset_c)
+
     # -- operations reset (scenario load / bulk-export replay) -----------------
 
     def reset_operations(self) -> None:
@@ -664,6 +741,13 @@ class Simulator:
             std = self.net["std_types"]["pump"].get(meta["name"])
             if std is not None and hasattr(std, "lift_seed_bar"):
                 std.lift_bar = float(std.lift_seed_bar)
+        # weather overrides normalize like station modes (ONE doctrine —
+        # M3 review): the replay starts from the bundle's environment; a
+        # scenario recipe restores its own overrides afterwards
+        if (self.environment.t_offset_c
+                or self.environment.dryness_override is not None):
+            self.environment = EnvironmentState()
+            self._rebuild_demand_profiles()
 
     # -- derived quantities & wire payload -------------------------------------
 

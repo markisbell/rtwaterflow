@@ -178,7 +178,7 @@ export default function MapDiagram({
   const consumerPopup = (cons: Topology["consumers"][number]): string => {
     const { latest: f, observedOnly: obs } = liveRef.current;
     const head = `<b>${esc(t("tip.consumer", { name: cons.name }))}</b>`
-      + `<br><span style="color:var(--muted)">${t("pop.designDemand")} ${fmt((cons.mdot_demand_kg_per_s ?? 0) * 3.6, 2)} m³/h</span>`;
+      + `<br><span style="color:var(--muted)">${t("pop.designDemand")} ${fmt((cons.mdot_demand_kg_per_s ?? 0) * M3H_PER_KG_S, 2)} m³/h</span>`;
     if (!f) return `${head}<br>${t("pop.noData")}`;
     const c = consumerLive(cons.id);
     if (!c) return `${head}<br>${t("pop.unobserved")}`;
@@ -295,7 +295,9 @@ export default function MapDiagram({
       const pl = L.polyline(latlngs, {
         color: UNOBSERVED_LINE, weight: 2, opacity: 0.95,
       }).addTo(map);
-      pl.bindTooltip(t("tip.trench", { from: tr.from_node, to: tr.to_node }));
+      // tooltips are innerHTML in Leaflet — esc() every user-controlled
+      // name (imported bundles / POST /consumer names; M3 review: XSS)
+      pl.bindTooltip(t("tip.trench", { from: esc(tr.from_node), to: esc(tr.to_node) }));
       pl.bindPopup(() => trenchPopup(tr), { autoPan: false });
       trenchRef.current.set(tr.id, pl);
     }
@@ -340,7 +342,7 @@ export default function MapDiagram({
         radius: 6, color: "#4c1d95", weight: 1.5,
         fillColor: "#8b5cf6", fillOpacity: 1,
       }).addTo(map);
-      pm.bindTooltip(t("tip.prv", { name: v.name }));
+      pm.bindTooltip(t("tip.prv", { name: esc(v.name) }));
       pm.bindPopup(() => prvPopup(v.id, v.name), { autoPan: false });
       prvRef.current.set(v.id, pm);
     }
@@ -357,7 +359,7 @@ export default function MapDiagram({
         radius: 7, color: "#0e7490", weight: 1.5,
         fillColor: "#67e8f9", fillOpacity: 1,
       }).addTo(map);
-      sm.bindTooltip(t("tip.station", { name: s.name }));
+      sm.bindTooltip(t("tip.station", { name: esc(s.name) }));
       sm.bindPopup(() => stationPopup(s.id, s.name), { autoPan: false });
       stationRef.current.set(s.id, sm);
       L.marker(pos, {
@@ -378,7 +380,7 @@ export default function MapDiagram({
         radius: 8, color: "#1e40af", weight: 1.5,
         fillColor: "#60a5fa", fillOpacity: 1,
       }).addTo(map);
-      tm.bindTooltip(t("tip.tank", { name: p.name }));
+      tm.bindTooltip(t("tip.tank", { name: esc(p.name) }));
       tm.bindPopup(() => tankPopup(p.node, p.name), { autoPan: false });
       tankRef.current.set(p.id, tm);
       L.marker(pos, {
@@ -397,7 +399,7 @@ export default function MapDiagram({
         radius: 3.5, color: "#5b6472", weight: 1,
         fillColor: "#39424f", fillOpacity: 0.9,
       }).addTo(map);
-      nm.bindTooltip(t("tip.node", { name: n.name, elev: fmt(n.elevation_m, 0) }));
+      nm.bindTooltip(t("tip.node", { name: esc(n.name), elev: fmt(n.elevation_m, 0) }));
       wireInteractions(nm, {
         kind: "node", id: n.name, name: n.name, node: n.name,
       });
@@ -416,7 +418,7 @@ export default function MapDiagram({
         fillColor: UNOBSERVED,
         fillOpacity: 0.9,
       }).addTo(map);
-      cm.bindTooltip(t("tip.consumer", { name: c.name }));
+      cm.bindTooltip(t("tip.consumer", { name: esc(c.name) }));
       cm.bindPopup(() => consumerPopup(c), { autoPan: false });
       wireInteractions(cm, {
         kind: "consumer", id: c.id, name: c.name, node: c.node,
@@ -434,7 +436,7 @@ export default function MapDiagram({
         radius: 8, color: "#7a5400", weight: 1.5,
         fillColor: PLANT_COLOR, fillOpacity: 1,
       }).addTo(map);
-      cm.bindTooltip(t("tip.plant", { name: plant.name }));
+      cm.bindTooltip(t("tip.plant", { name: esc(plant.name) }));
       cm.bindPopup(() => plantPopup(), { autoPan: false });
       wireInteractions(cm, {
         kind: "producer", id: plant.id, name: plant.name, node: plant.node,

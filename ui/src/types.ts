@@ -175,6 +175,19 @@ export interface TankState {
   fire_reserve_breached: boolean;
 }
 
+// ---- GET/POST /environment (M3 weather knob) ------------------------------------
+
+export interface EnvironmentInfo {
+  t_offset_c: number;
+  dryness_override: number | null;
+  t_air_now_c: number | null;
+  season_day_of_year: number;
+  has_day_types: boolean;
+  has_dryness: boolean;
+  legacy_demand_factor: boolean;
+  n_profiled_consumers: number;
+}
+
 // ---- GET /stations + POST /station/{name} ---------------------------------------
 
 export interface StationInfo {

@@ -35,6 +35,7 @@ import pandapipes as pp
 from pandapipes.std_types import create_pump_std_type
 from pandapipes.std_types.std_type_class import PumpStdType
 
+from .demand import EnvironmentState, build_demand_profiles
 from .net_inputs import NetInputs
 
 log = logging.getLogger(__name__)
@@ -140,10 +141,10 @@ class ProfileArrays:
     steps: int                 # total ticks over the whole horizon
     steps_per_day: int
     n_days: int
-    mdot_kg_per_s: np.ndarray  # consumer BASE demand [n_cons, T]
-    demand_factor: np.ndarray  # [T] global diurnal factor (M2 interim; M3
-    #                            archetype profiles replace it)
-    t_air_c: np.ndarray        # [T] environment driver (unused until M3)
+    mdot_kg_per_s: np.ndarray  # consumer demand [n_cons, T] — M3 engine
+    #                            profiles (archetype × day × weather × noise;
+    #                            legacy bundles: base × demand_factor)
+    t_air_c: np.ndarray        # [T] air temperature (incl. runtime offset)
     index: NetIndex
 
 
@@ -157,11 +158,18 @@ def _resample_staircase(values, n_ticks: int) -> np.ndarray:
 def build_network(
     inputs: NetInputs,
     steps_per_day: int = 1440,
+    environment: EnvironmentState | None = None,
 ) -> tuple[pp.pandapipesNet, ProfileArrays]:
-    """Construct the pandapipes net + dense profiles from validated inputs."""
+    """Construct the pandapipes net + dense profiles from validated inputs.
+
+    *environment* carries the runtime weather overrides (temperature
+    offset, dryness) into the demand engine — the ``POST /environment``
+    knob rebuilds the profiles with it."""
     n_ticks = inputs.n_days * steps_per_day
 
     t_air_c = _resample_staircase(inputs.environment.t_air_c, n_ticks)
+    if environment is not None:
+        t_air_c = t_air_c + float(environment.t_offset_c)
 
     net = pp.create_empty_network(fluid="water", name=inputs.name)
 
@@ -187,16 +195,18 @@ def build_network(
             k_mm=float(p.k_mm), sections=p.sections, name=f"pipe{i}")
         pipe_idx.append(pi)
 
-    # --- consumers: sinks with fixed demand (M0) ---
+    # --- consumers: sinks; demand profiles from the M3 engine (archetype
+    # shapes for sized consumers, the legacy demand_factor/constant path
+    # for the rest — engine.build_demand_profiles) ---
     consumers = inputs.consumers.consumers
     n_cons = len(consumers)
-    mdot = np.empty((n_cons, n_ticks))
+    mdot = build_demand_profiles(inputs, steps_per_day, env=environment)
+    assert mdot.shape == (n_cons, n_ticks)
     consumer_idx: list[int] = []
     for i, c in enumerate(consumers):
-        mdot[i] = float(c.mdot_kg_per_s)
         name = c.name or f"consumer_{c.node}"
         sk = pp.create_sink(net, junction=junction[c.node],
-                            mdot_kg_per_s=float(c.mdot_kg_per_s), name=name)
+                            mdot_kg_per_s=float(mdot[i, 0]), name=name)
         consumer_idx.append(sk)
 
     # --- supply: head sources = plain ext_grids + tank-owned ext_grids
@@ -290,15 +300,11 @@ def build_network(
         stations=np.asarray(station_idx, dtype=np.int64),
         producer_meta=producer_meta,
     )
-    factor = (_resample_staircase(inputs.environment.demand_factor, n_ticks)
-              if inputs.environment.demand_factor is not None
-              else np.ones(n_ticks))
     profiles = ProfileArrays(
         steps=n_ticks,
         steps_per_day=steps_per_day,
         n_days=inputs.n_days,
         mdot_kg_per_s=mdot,
-        demand_factor=factor,
         t_air_c=t_air_c,
         index=index,
     )

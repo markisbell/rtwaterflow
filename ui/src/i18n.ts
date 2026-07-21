@@ -257,6 +257,36 @@ const de = {
       "Löschreserve liegt direkt über dem Mindeststand.",
   },
 
+  env: {
+    heading: "Umwelt & Wetter",
+    tAir: "Lufttemperatur",
+    tOffset: "Szenario-Aufschlag",
+    normal: "Normal",
+    hot: "Hitzetag",
+    normalTitle: "Wetter des Datenpakets (Sommertag, mild)",
+    hotTitle:
+      "Hitze-Trocken-Szenario: +6 K, Trockenindex 0,9 — Gartenbewässerung " +
+      "verschiebt die Tagesspitze auf 19–21 Uhr (Regime 2018)",
+    custom: "abweichende Wetter-Übersteuerung aktiv (API/Szenario)",
+    legacyNote:
+      "Dieses Netz hat keine Archetyp-Profile (Altbestand) — das Wetter " +
+      "ändert nur die Anzeige, nicht den Bedarf.",
+    hint:
+      "Temperatur und Trockenheit treiben Bewässerung, Viehtränke und " +
+      "Freibadbesuch — Spitzenlast entsteht aus dem Wetter (DVGW W 410).",
+  },
+
+  ct: {
+    heading: "Abnehmer-Tabelle",
+    consumer: "Abnehmer",
+    demanded: "Soll m³/h",
+    delivered: "Ist m³/h",
+    noneMetered: "keine Wasserzähler gesetzt — Tabelle leer (Messsicht)",
+    hint:
+      "Soll = Archetyp-Bedarf des Zeitschritts, Ist = geliefert. In der " +
+      "Messsicht erscheinen nur bemessene Abnehmer.",
+  },
+
   live: {
     loadingNet: "Lade Netz…",
     failedNet: "Netz konnte nicht geladen werden:",
@@ -557,6 +587,36 @@ const en: typeof de = {
       "Pumps start below the on-level and stop above the off-level " +
       "(two-point control, DVGW W 300-1). The fire reserve sits right " +
       "above the minimum level.",
+  },
+
+  env: {
+    heading: "Environment & weather",
+    tAir: "Air temperature",
+    tOffset: "Scenario offset",
+    normal: "Normal",
+    hot: "Hot day",
+    normalTitle: "The bundle's weather (mild summer day)",
+    hotTitle:
+      "Hot-dry scenario: +6 K, dryness 0.9 — garden irrigation shifts the " +
+      "daily peak to 19–21 h (the 2018 regime)",
+    custom: "custom weather override active (API/scenario)",
+    legacyNote:
+      "This network has no archetype profiles (legacy) — weather changes " +
+      "the display only, not the demand.",
+    hint:
+      "Temperature and dryness drive irrigation, livestock watering and " +
+      "pool visits — peak load emerges from the weather (DVGW W 410).",
+  },
+
+  ct: {
+    heading: "Consumer table",
+    consumer: "Consumer",
+    demanded: "Set m³/h",
+    delivered: "Act m³/h",
+    noneMetered: "no water meters placed — table empty (measured view)",
+    hint:
+      "Set = the archetype demand of this step, Act = delivered. The " +
+      "measured view lists metered consumers only.",
   },
 
   live: {

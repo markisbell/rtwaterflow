@@ -134,45 +134,44 @@ PIPES: list[tuple[str, str, int, str, int]] = [
 # consumers: node -> (name, mdot_kg_per_s, kind, storeys)
 # ---------------------------------------------------------------------------
 
-CONSUMERS: dict[str, tuple[str, float, str, int]] = {
-    "h2":  ("Bergstraße 1-9", 0.08, "residential", 2),
-    "h3":  ("Bergstraße 11-21", 0.09, "residential", 2),
-    "h5":  ("Panoramaweg 2-12", 0.07, "residential", 1),
-    "h6":  ("Panoramaweg 14-20", 0.06, "residential", 1),
-    "h7":  ("Am Hang 1-15", 0.11, "residential", 2),
-    "h8":  ("Kapellenweg 2-8", 0.05, "residential", 1),
-    "h9":  ("Kapellenweg 10-16", 0.06, "residential", 1),
-    "h10": ("Panoramaweg 22-28", 0.06, "residential", 1),
-    "h11": ("Am Hang 17-23", 0.07, "residential", 2),
-    "r2":  ("Hauptstraße 1-19 (MFH)", 0.28, "residential", 4),
-    "r3":  ("Grundschule Musterdorf", 0.10, "school", 3),
-    "r4":  ("Hauptstraße 21-39", 0.16, "residential", 3),
-    "r5":  ("Talstraße 2-16", 0.14, "residential", 2),
-    "r6":  ("Talstraße 18-30", 0.12, "residential", 2),
-    "r7":  ("Marktplatz (MFH)", 0.24, "residential", 4),
-    "r8":  ("Kirchgasse 1-11", 0.10, "residential", 2),
-    "r9":  ("Ringstraße 2-14", 0.12, "residential", 2),
-    "r10": ("Brauerei Musterbräu", 0.40, "industry", 2),
-    "b1":  ("Gartenweg 1-9", 0.07, "residential", 1),
-    "b2":  ("Gartenweg 11-17", 0.06, "residential", 1),
-    "b3":  ("Milchviehhof Wiedemann", 0.22, "farm", 1),
-    "b4":  ("Wiesenweg 2-10", 0.08, "residential", 1),
-    "b5":  ("Wiesenweg 12-18", 0.06, "residential", 1),
-    "b6":  ("Freibad Musterdorf", 0.12, "pool", 1),
-    "b7":  ("Ringstraße 16-24", 0.09, "residential", 2),
-    "b8":  ("Ringstraße 26-32", 0.08, "residential", 2),
+# M3: sizes make consumers ARCHETYPE-profiled (demand engine). Residential
+# population = mdot·86400 / 123 l/(E·d) (BDEW/UBA per-capita, TF §6);
+# pupils at ~20 l/d, dairy cows at ~100 l/d, pool visitors at ~30 l/bather.
+CONSUMERS: dict[str, tuple[str, float, str, int, dict]] = {
+    "h2":  ("Bergstraße 1-9", 0.08, "residential", 2, {"population": 56}),
+    "h3":  ("Bergstraße 11-21", 0.09, "residential", 2, {"population": 63}),
+    "h5":  ("Panoramaweg 2-12", 0.07, "residential", 1, {"population": 49}),
+    "h6":  ("Panoramaweg 14-20", 0.06, "residential", 1, {"population": 42}),
+    "h7":  ("Am Hang 1-15", 0.11, "residential", 2, {"population": 77}),
+    "h8":  ("Kapellenweg 2-8", 0.05, "residential", 1, {"population": 35}),
+    "h9":  ("Kapellenweg 10-16", 0.06, "residential", 1, {"population": 42}),
+    "h10": ("Panoramaweg 22-28", 0.06, "residential", 1, {"population": 42}),
+    "h11": ("Am Hang 17-23", 0.07, "residential", 2, {"population": 49}),
+    "r2":  ("Hauptstraße 1-19 (MFH)", 0.28, "residential", 4,
+            {"population": 197}),
+    "r3":  ("Grundschule Musterdorf", 0.10, "school", 3, {"pupils": 430}),
+    "r4":  ("Hauptstraße 21-39", 0.16, "residential", 3, {"population": 112}),
+    "r5":  ("Talstraße 2-16", 0.14, "residential", 2, {"population": 98}),
+    "r6":  ("Talstraße 18-30", 0.12, "residential", 2, {"population": 84}),
+    "r7":  ("Marktplatz (MFH)", 0.24, "residential", 4, {"population": 169}),
+    "r8":  ("Kirchgasse 1-11", 0.10, "residential", 2, {"population": 70}),
+    "r9":  ("Ringstraße 2-14", 0.12, "residential", 2, {"population": 84}),
+    "r10": ("Brauerei Musterbräu", 0.40, "industry", 2, {"employees": 40}),
+    "b1":  ("Gartenweg 1-9", 0.07, "residential", 1, {"population": 49}),
+    "b2":  ("Gartenweg 11-17", 0.06, "residential", 1, {"population": 42}),
+    "b3":  ("Milchviehhof Wiedemann", 0.22, "farm", 1, {"animals": 190}),
+    "b4":  ("Wiesenweg 2-10", 0.08, "residential", 1, {"population": 56}),
+    "b5":  ("Wiesenweg 12-18", 0.06, "residential", 1, {"population": 42}),
+    "b6":  ("Freibad Musterdorf", 0.12, "pool", 1, {"visitors_design": 350}),
+    "b7":  ("Ringstraße 16-24", 0.09, "residential", 2, {"population": 63}),
+    "b8":  ("Ringstraße 26-32", 0.08, "residential", 2, {"population": 56}),
 }
 
 STEPS = 96             # 15-min environment resolution, one day
 RES_MIN = 15
 
-#: typical German residential diurnal factors per hour (TF §6: night valley
-#: 02-04, morning peak 07-08, evening peak 19-20); mean ≈ 0.94
-HOURLY_FACTOR = [
-    0.42, 0.38, 0.35, 0.36, 0.45, 0.65, 1.10, 1.60,
-    1.45, 1.20, 1.10, 1.15, 1.20, 1.10, 0.95, 0.90,
-    0.95, 1.10, 1.30, 1.45, 1.30, 1.00, 0.70, 0.50,
-]
+# (the M2 interim HOURLY_FACTOR is gone — every consumer carries archetype
+# size data, so the M3 demand engine shapes the profiles)
 
 #: tank + hysteresis band (level metres above the tank bottom at 420 m)
 TANK = dict(area_m2=60.0, level_min_m=1.0, level_max_m=4.6,
@@ -227,8 +226,8 @@ def build() -> dict[str, dict]:
 
     consumers = [
         {"node": node, "name": name, "mdot_kg_per_s": mdot,
-         "kind": kind, "storeys": storeys}
-        for node, (name, mdot, kind, storeys) in CONSUMERS.items()
+         "kind": kind, "storeys": storeys, "size": size}
+        for node, (name, mdot, kind, storeys, size) in CONSUMERS.items()
     ]
 
     supply = {
@@ -253,13 +252,15 @@ def build() -> dict[str, dict]:
         ],
     }
 
-    # deterministic mild diurnal air temperature (M3 demand-driver slot)
-    t_air = [round(10.0 - 4.0 * math.cos(2 * math.pi * (i - 8) / STEPS), 2)
+    # deterministic mid-July summer day (M3: pool in season, mild farm
+    # temperature coupling; the Hitzetag override pushes past the 28 °C
+    # irrigation trigger): 12 °C night valley → 26 °C mid-afternoon
+    t_air = [round(19.0 - 7.0 * math.cos(2 * math.pi * (i - 8) / STEPS), 2)
              for i in range(STEPS)]
-    factor = [HOURLY_FACTOR[i * 24 // STEPS] for i in range(STEPS)]
     environment = {
         "resolution_minutes": RES_MIN, "steps": STEPS, "t_air_c": t_air,
-        "demand_factor": factor,
+        "day_types": ["workday"], "dryness": [0.3],
+        "season_day_of_year": 196,
     }
 
     return {

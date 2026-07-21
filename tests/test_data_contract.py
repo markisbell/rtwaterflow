@@ -291,6 +291,25 @@ def test_pipe_bypassing_station_rejected(hillside_docs):
         _rebuild(docs)
 
 
+def test_empty_consumer_size_rejected():
+    """size: {} would silently flip a consumer from the bit-exact legacy
+    demand path onto archetype shaping (M3 review) — reject it."""
+    with pytest.raises(ValidationError, match="at least one"):
+        ConsumerSpec.model_validate(
+            {"node": "j1", "mdot_kg_per_s": 0.1, "size": {}})
+
+
+def test_season_day_of_year_caps_at_365():
+    """The engine runs an idealized 365-day year; 366 would silently fold
+    onto January 1st via the %365 wrap (M3 review) — reject it."""
+    from rtwaterflow.models import EnvironmentFile
+
+    with pytest.raises(ValidationError):
+        EnvironmentFile.model_validate({
+            "resolution_minutes": 15, "steps": 96,
+            "t_air_c": [10.0] * 96, "season_day_of_year": 366})
+
+
 def test_non_monotone_curve_fit_rejected():
     """Decreasing POINTS whose degree-2 REGRESSION is convex with an
     in-range minimum: the engine runs on the fit — reject it, not just the

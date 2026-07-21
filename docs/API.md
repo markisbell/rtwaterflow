@@ -65,6 +65,16 @@ limits · `500` internal failures only —
 - **`GET /stations`** — Pump stations: control configuration, operator mode and the live running state.
 - **`GET /tanks`** — Live tank states: level, usable volume, buffer time at the current draw, and the alarm flags (overflow / empty / fire-reserve breached). ``id`` is the platform producer pid (joinable with /producers).
 
+## environment
+
+| Method | Path | Summary |
+|---|---|---|
+| `GET` | `/environment` | Environment drivers + overrides |
+| `POST` | `/environment` | Set weather overrides |
+
+- **`GET /environment`** — Bundle environment drivers and the active runtime overrides.
+- **`POST /environment`** — Apply runtime weather overrides (Hitzetag: ``t_offset_c`` + ``dryness`` 1.0). The demand engine rebuilds the archetype profiles from the next tick; legacy demand_factor bundles only shift their displayed temperature.
+
 ## consumers
 
 | Method | Path | Summary |

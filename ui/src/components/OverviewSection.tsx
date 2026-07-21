@@ -5,7 +5,7 @@
  */
 import { useTranslation } from "react-i18next";
 import Section, { Stat } from "./Section";
-import { fmt, pressureColor } from "../scales";
+import { M3H_PER_KG_S, fmt, pressureColor } from "../scales";
 import type {
   EstimatedState,
   ObservedSummary,
@@ -42,7 +42,7 @@ export default function OverviewSection({
   ) : null;
 
   const flow = (v: number | null | undefined) =>
-    v != null ? `${fmt(v * 3.6, 2)} m³/h` : t("ov.na");
+    v != null ? `${fmt(v * M3H_PER_KG_S, 2)} m³/h` : t("ov.na");
 
   return (
     <Section title={t("ov.heading")} open={open} onToggle={onToggle}>

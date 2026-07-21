@@ -91,7 +91,8 @@ def test_recovery_after_transient_failure(hillside_inputs, monkeypatch):
 
     def flaky(net, **kwargs):
         calls["n"] += 1
-        if calls["n"] <= 3:  # poison all 3 ladder tiers of one step
+        if calls["n"] <= 4:  # poison all 4 ladder tiers of one step
+            # (tier count pinned in lockstep with test_retry_ladder)
             raise PipeflowNotConverged("transient (test)")
         return real_pipeflow(net, **kwargs)
 
