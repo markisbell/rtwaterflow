@@ -87,6 +87,7 @@ export default function MapDiagram({
   const stationRef = useRef<Map<number, L.CircleMarker>>(new Map());
   const tankRef = useRef<Map<number, L.CircleMarker>>(new Map());
   const alarmRef = useRef<Map<string, L.CircleMarker>>(new Map());
+  const emitterRef = useRef<Map<string, L.Marker>>(new Map());
   const plantRef = useRef<L.CircleMarker | null>(null);
   const [light, setLight] = useState(true);
 
@@ -475,6 +476,7 @@ export default function MapDiagram({
       stationRef.current.clear();
       tankRef.current.clear();
       alarmRef.current.clear();
+      emitterRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topo, i18n.language]); // rebuild (incl. tooltips) on language change
@@ -671,6 +673,42 @@ export default function MapDiagram({
 
     if (plantRef.current?.isPopupOpen()) {
       plantRef.current.setPopupContent(plantPopup());
+    }
+
+    // M5 emitter markers (hydrant 🚒 / burst 💥 — leaks stay off the map to
+    // avoid clutter): diffed decorative glyphs at the emitter node
+    if (mapRef.current) {
+      const emMap = mapRef.current;
+      const nodeGeoE = new Map(topo.nodes.map((n) => [n.name, n.geo]));
+      const wantEm = new Map<string, { pos: [number, number]; icon: string; title: string }>();
+      for (const em of f?.emitters ?? []) {
+        if (em.kind === "leak") continue;
+        const pos = nodeGeoE.get(em.node);
+        if (!pos) continue;
+        wantEm.set(em.name, {
+          // esc() the user-controlled name — the tooltip is innerHTML in
+          // Leaflet (stored XSS via imported/POSTed names — M5 review)
+          pos, icon: em.kind === "hydrant" ? "🚒" : "💥",
+          title: `${esc(em.name)}: ${fmt(em.m3_per_h, 1)} m³/h`,
+        });
+      }
+      for (const [key, mk] of emitterRef.current) {
+        if (!wantEm.has(key)) { emMap.removeLayer(mk); emitterRef.current.delete(key); }
+      }
+      for (const [key, w] of wantEm) {
+        const existing = emitterRef.current.get(key);
+        if (existing) {
+          existing.setTooltipContent(w.title);
+        } else {
+          const mk = L.marker(w.pos, {
+            icon: L.divIcon({ className: "emitter-icon", html: w.icon,
+                              iconAnchor: [8, 8] }),
+            interactive: true, keyboard: false,
+          }).addTo(emMap);
+          mk.bindTooltip(w.title);
+          emitterRef.current.set(key, mk);
+        }
+      }
     }
 
     // M4 traffic-light overlay: alarm halos on affected entities, diffed

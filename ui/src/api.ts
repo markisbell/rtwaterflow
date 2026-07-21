@@ -1,6 +1,8 @@
 import type {
   ActiveConfig,
   ApplyResponse,
+  EmitterInfo,
+  EmitterState,
   EngineStatus,
   EnvironmentInfo,
   EstimationConfigInfo,
@@ -79,6 +81,23 @@ export const api = {
     dryness?: number;
     clear_dryness?: boolean;
   }) => post<EnvironmentInfo>("/environment", body),
+
+  // ---- pressure-dependent hydraulics: emitters + PDA (M5) ----
+  emitters: () => get<EmitterInfo>("/emitters"),
+  openHydrant: (body: {
+    node: string; target_m3_h: number; duration_minutes?: number;
+    name?: string;
+  }) => post<EmitterState>("/hydrant", body),
+  placeBurst: (body: { node: string; area_m2: number; name?: string }) =>
+    post<EmitterState>("/burst", body),
+  setLeakage: (coefficient_per_km: number) =>
+    post<{ leaks: number; coefficient_per_km: number }>(
+      "/leakage", { coefficient_per_km }),
+  clearLeakage: () => del<{ cleared: number }>("/leakage"),
+  removeEmitter: (name: string) =>
+    del<{ removed: string }>(`/emitter/${encodeURIComponent(name)}`),
+  setPda: (enabled: boolean) =>
+    post<{ pda_enabled: boolean }>("/pda", { enabled }),
 
   // ---- consumers (M0: fixed demand) ----
   addConsumer: (body: {

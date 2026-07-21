@@ -206,6 +206,25 @@ export interface StationInfo {
   curve: [number, number][]; // [[m³/h, bar lift], ...]
 }
 
+/** One M5 emitter — a pressure-dependent orifice (leak/hydrant/burst). */
+export interface EmitterState {
+  name: string;
+  node: string;
+  kind: "hydrant" | "burst" | "leak";
+  coefficient: number;
+  exponent: number;
+  target_m3_h: number | null;
+  expires_tick: number | null;
+  mdot_kg_per_s: number;
+  m3_per_h: number;
+}
+
+/** GET /emitters + POST /pda. */
+export interface EmitterInfo {
+  emitters: EmitterState[];
+  pda_enabled: boolean;
+}
+
 /** One M4 compliance finding (German rule citation on the wire). */
 export interface Finding {
   severity: "info" | "warning" | "violation";
@@ -226,13 +245,17 @@ export interface StepSummary {
   mdot_feed_kg_per_s: number | null;
   mdot_demand_kg_per_s: number | null;
   mdot_delivered_kg_per_s: number | null;
+  /** Demand the network could not deliver (M5 PDA undersupply). */
+  mdot_deficit_kg_per_s?: number | null;
   /** Level-effective flow INTO the tanks (spill excluded). */
   mdot_stored_kg_per_s?: number | null;
   /** Overflow spill at level_max-clamped tanks. */
   mdot_spill_kg_per_s?: number | null;
-  /** Flow absorbed by fixed-pressure boundaries (multi-source nets);
-   *  feed = delivered + stored + spill + exported. */
+  /** Flow absorbed by fixed-pressure boundaries (multi-source nets). */
   mdot_exported_kg_per_s?: number | null;
+  /** Emitter withdrawal (M5 leaks/hydrants/bursts).
+   *  feed = delivered + stored + spill + exported + emitted. */
+  mdot_emitted_kg_per_s?: number | null;
   balance_err_kg_per_s: number | null;
 }
 
@@ -346,6 +369,8 @@ export interface StepResult {
   producers: ProducerState[];
   /** Tank states — station SCADA, present in strict mode too. */
   tanks: TankState[];
+  /** M5 emitters — equipment SCADA, present in strict mode too. */
+  emitters: EmitterState[];
   controls: Controls;
   measurements: Measurements;
   observed_summary: ObservedSummary | null;

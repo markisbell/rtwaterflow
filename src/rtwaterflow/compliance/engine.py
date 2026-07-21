@@ -64,6 +64,10 @@ P_REST_MAX_BAR = 10.0
 V_MAX_M_S = 2.0
 V_STAGNATION_M_S = 0.005
 V_SELF_CLEAN_M_S = 0.3
+#: W 405 fire flow: minimum flow pressure at a drawing hydrant [bar], and
+#: the fraction of the target a hydrant must still deliver to "pass"
+P_FIRE_MIN_BAR = 1.5
+FIRE_DELIVERY_FRACTION = 0.9
 
 
 def _de(x: float, nd: int = 2) -> str:
@@ -165,6 +169,7 @@ class ComplianceEngine:
         self._check_nodes(payload, out)
         self._check_pipes(payload, out)
         self._check_tanks(payload, out)
+        self._check_fire(payload, out)
         if solver_status == "degraded":
             out.append(Finding(
                 "info", "Modellhinweis", "solver", "system", "solver",
@@ -306,6 +311,37 @@ class ComplianceEngine:
                          "Spülplan prüfen (Leitungen: "
                          + ", ".join(str(i) for i in no_self_clean[:12])
                          + ("…" if len(no_self_clean) > 12 else "") + ")")))
+
+    def _check_fire(self, payload: dict, out: list[Finding]) -> None:
+        """W 405 fire flow: a drawing hydrant must keep ≥ 1.5 bar flow
+        pressure at its node and deliver ≥ 90 % of its target. During a
+        hydrant draw the 2.5 m/s velocity peak is allowed (so the v_max
+        violation is downgraded — not implemented as a suppression here;
+        the fire finding is the operative signal)."""
+        p_by_node = {j["name"]: j.get("p_bar") for j in payload.get(
+            "junctions", [])}
+        for em in payload.get("emitters", []):
+            if em.get("kind") != "hydrant":
+                continue
+            p = p_by_node.get(em["node"])
+            node = em["node"]
+            if p is not None and p < P_FIRE_MIN_BAR:
+                out.append(Finding(
+                    "violation", "DVGW W 405", "fire_flow", "node", node,
+                    value=round(p, 3), threshold=P_FIRE_MIN_BAR,
+                    text_de=(f"Löschwasserentnahme am Knoten {node}: "
+                             f"Fließdruck {_de(p)} bar unter dem Minimum "
+                             "von 1,5 bar (W 405)")))
+            target = em.get("target_m3_h")
+            delivered = em.get("m3_per_h")
+            if (target and delivered is not None
+                    and delivered < FIRE_DELIVERY_FRACTION * target):
+                out.append(Finding(
+                    "violation", "DVGW W 405", "fire_flow", "node", node,
+                    value=round(delivered, 1), threshold=round(target, 1),
+                    text_de=(f"Hydrant {em.get('name', node)}: nur "
+                             f"{_de(delivered, 0)} von {_de(target, 0)} m³/h "
+                             "Löschwasser lieferbar (W 405)")))
 
     def _check_tanks(self, payload: dict, out: list[Finding]) -> None:
         day = self.steps_per_day

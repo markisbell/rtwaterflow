@@ -83,6 +83,22 @@ limits · `500` internal failures only —
 
 - **`GET /findings`** — Current findings with severity counts. Every finding cites its rule (DVGW W 400-1 / W 405 / W 300-1 — docs/COMPLIANCE.md maps the checks).
 
+## emitters
+
+| Method | Path | Summary |
+|---|---|---|
+| `POST` | `/burst` | Place a pipe burst |
+| `DELETE` | `/emitter/{name}` | Remove an emitter |
+| `GET` | `/emitters` | Emitter states (leaks/hydrants/bursts) |
+| `POST` | `/hydrant` | Open a fire hydrant |
+| `DELETE` | `/leakage` | Clear background leakage |
+| `POST` | `/leakage` | Seed background leakage |
+| `GET` | `/pda` | Pressure-driven-demand toggle |
+| `POST` | `/pda` | Toggle pressure-driven demand |
+
+- **`GET /emitters`** — Live emitter states + the PDA toggle.
+- **`POST /pda`** — ON (default): undersupplied taps deliver less (Wagner). OFF: fixed demand — undersupply shows as impossible negative pressure (the M0 contrast that motivates PDA).
+
 ## consumers
 
 | Method | Path | Summary |

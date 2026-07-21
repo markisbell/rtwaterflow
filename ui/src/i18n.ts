@@ -257,6 +257,32 @@ const de = {
       "Löschreserve liegt direkt über dem Mindeststand.",
   },
 
+  event: {
+    heading: "Störungen & Ereignisse",
+    pda: "Druckabhängiger Bedarf",
+    pdaTitle:
+      "Wagner-Modell: unterversorgte Zapfstellen liefern weniger, statt " +
+      "unphysikalischer Negativdrücke",
+    on: "An", off: "Aus",
+    pdaOffWarn:
+      "PDA aus: Unterversorgung erscheint als (unphysikalischer) " +
+      "Negativdruck — der Lehrkontrast.",
+    deficit: "Nicht gedeckter Bedarf: {{v}} m³/h",
+    emitted: "Austrag (Leckage/Hydrant/Bruch): {{v}} m³/h",
+    node: "Knoten",
+    hydrantTitle: "Hydrant öffnen (Löschwasser m³/h, W 405)",
+    burst: "Rohrbruch",
+    burstTitle: "Rohrbruch setzen (große Öffnung)",
+    leak: "Leckage",
+    seed: "aufbauen",
+    repair: "sanieren",
+    remove: "entfernen",
+    leaksActive: "Leckagestellen aktiv",
+    hint:
+      "Hydrant/Bruch/Leckage sind druckabhängige Entnahmen (m = C·p^N). " +
+      "Als Szenario speicherbar (Datei-Menü).",
+  },
+
   alarm: {
     heading: "Meldungen (Regelwerk)",
     allClear: "keine Regelverletzungen — alles im grünen Bereich",
@@ -602,6 +628,32 @@ const en: typeof de = {
       "Pumps start below the on-level and stop above the off-level " +
       "(two-point control, DVGW W 300-1). The fire reserve sits right " +
       "above the minimum level.",
+  },
+
+  event: {
+    heading: "Incidents & events",
+    pda: "Pressure-driven demand",
+    pdaTitle:
+      "Wagner model: undersupplied taps deliver less, instead of " +
+      "unphysical negative pressures",
+    on: "On", off: "Off",
+    pdaOffWarn:
+      "PDA off: undersupply shows as (unphysical) negative pressure — " +
+      "the teaching contrast.",
+    deficit: "Unmet demand: {{v}} m³/h",
+    emitted: "Withdrawal (leak/hydrant/burst): {{v}} m³/h",
+    node: "Node",
+    hydrantTitle: "Open a hydrant (fire flow m³/h, W 405)",
+    burst: "Burst",
+    burstTitle: "Place a pipe burst (large orifice)",
+    leak: "Leakage",
+    seed: "seed",
+    repair: "repair",
+    remove: "remove",
+    leaksActive: "leak sites active",
+    hint:
+      "Hydrant/burst/leakage are pressure-dependent withdrawals " +
+      "(m = C·p^N). Saveable as a scenario (File menu).",
   },
 
   alarm: {

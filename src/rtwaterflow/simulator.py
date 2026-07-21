@@ -24,8 +24,15 @@ from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
 
 from .assets.tank import WaterTank
 from .compliance import ComplianceEngine
+from .compliance.engine import P_MIN_EG_BAR
 from .config import Settings, get_settings
 from .control.rules import HysteresisRule, RuleEngine
+from .hydraulics import EmitterController, PDAController
+from .hydraulics.pda import (
+    DAMP as PDA_DAMP,
+    MAX_ITERS as PDA_MAX_ITERS,
+    TOL as PDA_TOL,
+)
 from .estimator import EstimationConfig, ForwardObserver
 from .demand import EnvironmentState, build_demand_profiles
 from .net_inputs import NetInputs
@@ -65,6 +72,7 @@ class StepResult:
     # -- supply/equipment (always visible) --
     producers: list = field(default_factory=list)
     tanks: list = field(default_factory=list)
+    emitters: list = field(default_factory=list)   # M5 leaks/hydrants/bursts
     controls: dict = field(default_factory=dict)
     # -- observability layers --
     measurements: dict = field(default_factory=dict)
@@ -126,6 +134,12 @@ MAX_STATION_SOLVES = 16
 #: operating point — its check valve closes for the tick
 CV_CLOSE_MARGIN_BAR = 0.05
 
+#: an "ok" frame must not report gauge pressure below this (M5 review):
+#: negative pressure is unphysical (cavitation / air draw), so such a
+#: solve is downgraded to "degraded". A small negative tolerance absorbs
+#: solver round-off at a legitimately near-zero head source.
+NEG_PRESSURE_FLOOR_BAR = -0.05
+
 
 @dataclass
 class SolveOutcome:
@@ -179,7 +193,7 @@ def solve_with_retry(net, iter_base: int = 100) -> SolveOutcome:
 # forward observer's twin (estimator.py): one set of formulas, never two.
 # ---------------------------------------------------------------------------
 
-def collect_physics(net, idx, tanks=None) -> dict:
+def collect_physics(net, idx, tanks=None, emitters=None) -> dict:
     """The four ground-truth wire keys + aux values from a SOLVED *net*.
 
     Returns ``{junctions, pipes, consumers, summary, aux}`` where ``aux``
@@ -188,7 +202,9 @@ def collect_physics(net, idx, tanks=None) -> dict:
 
     *tanks* (the Simulator's WaterTank list) supplies the overflow-spill
     split of the stored flow; the estimator twin passes None (no tank
-    objects — its stored figure then includes any spill).
+    objects — its stored figure then includes any spill). *emitters* (the
+    M5 EmitterController) supplies the leak/hydrant/burst withdrawal that
+    the head-source feed must also balance against.
     """
     rj, rp = net.res_junction, net.res_pipe
     rs = net.res_sink
@@ -266,8 +282,15 @@ def collect_physics(net, idx, tanks=None) -> dict:
     mdot_spill = float(sum(
         getattr(t, "mdot_spill_kg_per_s", 0.0) for t in (tanks or [])))
     mdot_stored = pos_tank - mdot_spill
+    # M5 emitter withdrawal (leaks/hydrants/bursts) — a real loss the feed
+    # must balance against, distinct from metered consumer delivery
+    mdot_emitted = float(sum(
+        e.mdot_kg_per_s for e in (emitters.emitters.values()
+                                  if emitters is not None else [])))
     demand_sum = float(mdot_demand.sum())
     delivered_sum = float(mdot_delivered.sum())
+    # M5 undersupply signal: demand the network could not deliver (PDA)
+    mdot_deficit = max(0.0, demand_sum - delivered_sum)
 
     summary = {
         "p_min_bar": _r(p_min_bar),
@@ -276,11 +299,14 @@ def collect_physics(net, idx, tanks=None) -> dict:
         "mdot_feed_kg_per_s": _r(mdot_feed),
         "mdot_demand_kg_per_s": _r(demand_sum),
         "mdot_delivered_kg_per_s": _r(delivered_sum),
+        "mdot_deficit_kg_per_s": _r(mdot_deficit),
         "mdot_stored_kg_per_s": _r(mdot_stored),
         "mdot_spill_kg_per_s": _r(mdot_spill),
         "mdot_exported_kg_per_s": _r(mdot_exported),
+        "mdot_emitted_kg_per_s": _r(mdot_emitted),
         "balance_err_kg_per_s": _r(mdot_feed - delivered_sum - mdot_stored
-                                   - mdot_spill - mdot_exported),
+                                   - mdot_spill - mdot_exported
+                                   - mdot_emitted),
     }
     return {
         "junctions": junctions,
@@ -365,6 +391,20 @@ class Simulator:
         #: sustained/stagnation state
         self.compliance = ComplianceEngine(
             inputs, self.index, self.settings.steps_per_day)
+
+        #: M5 pressure-dependent demand — Wagner delivery scaling. The
+        #: per-consumer p_req is looked up live from the compliance engine
+        #: (same W 400-1 storey table; kept in sync by consumer CRUD).
+        self.pda = PDAController(enabled=bool(self.settings.pda_enabled))
+
+        #: M5 pressure-dependent emitters (leaks / hydrants / bursts)
+        self.emitters = EmitterController(self.net, self.index.junction)
+        #: last seeded background-leakage coefficient (scenario-saved —
+        #: the per-junction leak emitters are derived from it)
+        self.leak_coefficient_per_km: float = 0.0
+        #: absolute (unwrapped) sim tick of the last run_step — the clock
+        #: time-limited emitters expire against
+        self._abs_tick: int = 0
 
         self._last_payload: dict | None = None  # last converged _collect()
         #: blind-spot flag: true when the observed layer misses the TRUE
@@ -464,13 +504,22 @@ class Simulator:
     # -- per-tick input application ------------------------------------------
 
     def _apply_step(self, tick: int) -> None:
-        """demand → tank heads → operating rules (all pre-solve inputs;
-        the M5 PDA/emitters extend this seam)."""
+        """demand → tank heads → operating rules (all pre-solve inputs).
+        The M5 PDA delivery scaling and the emitter withdrawals are the
+        pressure-dependent part — reset here, converged in ``_solve_step``."""
         # consumer demand: the M3 engine profiles carry the full archetype
-        # (or legacy demand_factor) modulation — plain column read
+        # (or legacy demand_factor) modulation — plain column read. Delivery
+        # scaling resets to full each tick (PDA re-derives it from the
+        # solved pressures); emitters start closed and open from pressure.
         if len(self.index.consumers):
             self.net.sink.loc[self.index.consumers, "mdot_kg_per_s"] = (
                 self.profiles.mdot_kg_per_s[:, tick])
+            self.net.sink.loc[self.index.consumers, "scaling"] = 1.0
+        # emitters expire against the ABSOLUTE tick (not the wrapped
+        # profile tick) so a timed hydrant expires correctly across day
+        # boundaries (M5 review)
+        self.emitters.expire(self._abs_tick)
+        self.emitters.zero_withdrawals()
         # tank heads from the integrated levels
         for tank in self.tanks:
             tank.write_p(self.net)
@@ -499,6 +548,10 @@ class Simulator:
     def run_step(self, step: int, day: int) -> StepResult:
         """One simulation step. Never raises for non-convergence."""
         tick = self._tick(step, day)
+        # absolute (unwrapped) sim tick for time-limited emitters — the
+        # profile ``tick`` wraps modulo the horizon, so a hydrant opened on
+        # day 1 would never expire against it (M5 review)
+        self._abs_tick = int(day) * self.profiles.steps_per_day + int(step)
         apply_error: str | None = None
         try:
             self._apply_step(tick)
@@ -575,6 +628,85 @@ class Simulator:
         )
 
     def _solve_step(self) -> SolveOutcome:
+        """The full tick solve: the station/check-valve hydraulic solve
+        (``_solve_hydraulic``) wrapped in the M5 pressure-dependent outer
+        fixed point (Wagner PDA delivery scaling + emitter withdrawals).
+
+        Each outer pass reads the solved node pressures, updates consumer
+        ``sink.scaling`` (delivery backs off below ``p_req``, dry at
+        ``p_min``) and emitter ``mdot = C·p^N1``, then re-solves — until the
+        scaling factors and emitter flows stop moving (``PDA_TOL``) or
+        ``PDA_MAX_ITERS``. A HEALTHY net is a no-op: every consumer sits at
+        p ≥ p_req, the first factor pass sees no change, no emitters exist,
+        and the loop exits after the single hydraulic solve."""
+        outcome = self._solve_hydraulic()
+        cons = self.index.consumers
+        pda_on = self.pda.enabled and len(cons)
+        has_em = bool(self.emitters.emitters)
+        if (not pda_on and not has_em) or not outcome.converged:
+            return outcome
+
+        cons_jj = [self.index.junction[n] for n in self.index.consumer_nodes]
+        p_req = [self.compliance.p_req.get(n, P_MIN_EG_BAR)
+                 for n in self.index.consumer_names]
+        for _ in range(PDA_MAX_ITERS):
+            rj = self.net.res_junction
+            # measure the Wagner consistency GAP at the current solved state
+            gap = 0.0
+            target = old = None
+            if pda_on:
+                p_cons = rj.p_bar.to_numpy()[cons_jj]
+                old = self.net.sink.loc[cons, "scaling"].to_numpy(dtype=float)
+                target = np.array([
+                    self.pda.factor(float(p_cons[i]), float(p_req[i]))
+                    for i in range(len(cons))], dtype=float)
+                gap = max(gap, float(np.max(np.abs(target - old)))
+                          if len(target) else 0.0)
+            if has_em:
+                gap = max(gap, self.emitters.consistency_gap(
+                    rj, self.index.junction))
+            if gap < PDA_TOL:
+                break            # scaling/emitter state is self-consistent
+            # not consistent: damped step toward the target, then re-solve
+            if pda_on:
+                self.net.sink.loc[cons, "scaling"] = old + PDA_DAMP * (
+                    target - old)
+            if has_em:
+                self.emitters.damped_update(
+                    rj, self.index.junction, PDA_DAMP)
+            outcome = self._solve_hydraulic()
+            if not outcome.converged:
+                return outcome
+        else:
+            # cap exhausted without a self-consistent state (very stiff
+            # undersupply) — honest degradation. The frame MAY carry
+            # unphysical pressures (an unsettled iterate); it is flagged so.
+            if outcome.converged:
+                log.warning("PDA/emitter fixed point not settled after %d "
+                            "iterations (gap %.3f)", PDA_MAX_ITERS, gap)
+                outcome = SolveOutcome(
+                    True, "degraded", outcome.tier, outcome.solve_ms,
+                    error="pressure-demand fixed point not settled after "
+                          f"{PDA_MAX_ITERS} iterations")
+        # PHYSICAL-VALIDITY guard (M5 review): PDA throttles only consumer
+        # demand, so an emitter (burst/hydrant) can crater OTHER junctions
+        # below zero while the fixed point is self-consistent. Negative
+        # gauge pressure is unphysical (real mains cavitate / draw air —
+        # pandapipes does not model that), so an "ok" frame must never
+        # report it. Downgrade to "degraded" — the honest signal that the
+        # model is outside its validity; the M4 p_min findings + the
+        # negative summary.p_min_bar still surface the crisis truthfully.
+        if outcome.converged and outcome.status == "ok":
+            p_min = float(self.net.res_junction.p_bar.min())
+            if p_min < NEG_PRESSURE_FLOOR_BAR:
+                return SolveOutcome(
+                    True, "degraded", outcome.tier, outcome.solve_ms,
+                    error=(f"physically invalid: {p_min:.2f} bar (negative "
+                           "gauge pressure — demand/emitter draw exceeds "
+                           "the network's capacity)"))
+        return outcome
+
+    def _solve_hydraulic(self) -> SolveOutcome:
         """Retry-ladder solve + station operating points + check valves.
 
         pandapipes applies pump curves EXPLICITLY per Newton iteration (no
@@ -699,7 +831,8 @@ class Simulator:
         """Last converged physics (or empty shells) + live controls."""
         payload = dict(self._last_payload) if self._last_payload else {
             "junctions": [], "pipes": [], "consumers": [],
-            "producers": [], "tanks": [], "summary": {}, "findings": [],
+            "producers": [], "tanks": [], "emitters": [], "summary": {},
+            "findings": [],
         }
         payload["controls"] = self._controls_dict()
         return payload
@@ -746,6 +879,100 @@ class Simulator:
                                 self.profiles.steps)
             + self.environment.t_offset_c)
 
+    # -- M5 pressure-dependent hydraulics (PDA + emitters) --------------------
+
+    def set_pda(self, enabled: bool) -> dict:
+        """Toggle pressure-driven demand. OFF reverts to fixed demand (the
+        M0 behavior — undersupply shows as negative pressure, the teaching
+        contrast). Resets any live delivery scaling to full."""
+        self.pda.enabled = bool(enabled)
+        if len(self.index.consumers):
+            self.net.sink.loc[self.index.consumers, "scaling"] = 1.0
+        return {"pda_enabled": self.pda.enabled}
+
+    def _node_pressure(self, node: str) -> float:
+        """Best current pressure estimate at *node* for sizing an emitter:
+        the last converged frame, else the built-in pn_bar."""
+        if self._last_payload:
+            for j in self._last_payload.get("junctions", []):
+                if j["name"] == node and j["p_bar"] is not None:
+                    return float(j["p_bar"])
+        jj = self.index.junction[node]
+        return float(self.net.junction.at[jj, "pn_bar"])
+
+    def open_hydrant(self, node: str, target_m3_h: float,
+                     duration_ticks: int | None = None,
+                     name: str | None = None) -> dict:
+        """Open a fire hydrant sized to draw *target_m3_h* at the node's
+        current pressure (W 405 fire flow). As the zone responds the
+        emitter follows the pressure, so a starved node delivers LESS than
+        target (the emitter is capped at the target — a hydrant of a given
+        nozzle cannot pull MORE than rated even at high pressure). The
+        honest fire-flow-vs-1.5-bar teaching signal."""
+        name = name or f"Hydrant {node}"
+        C = EmitterController.hydrant_coefficient(
+            float(target_m3_h), self._node_pressure(node))
+        max_mdot = float(target_m3_h) / 3600.0 * RHO_KG_M3
+        em = self.emitters.add(
+            name, node, "hydrant", C, exponent=0.5, start_tick=self._abs_tick,
+            duration_ticks=duration_ticks, target_m3_h=float(target_m3_h),
+            max_mdot_kg_per_s=max_mdot)
+        return em.payload()
+
+    def place_burst(self, node: str, area_m2: float,
+                    name: str | None = None) -> dict:
+        """Place a pipe burst as a large orifice (``C = Cd·A·√(2ρ)``) at a
+        junction — local pressure crater + upstream flow spike."""
+        name = name or f"Rohrbruch {node}"
+        C = EmitterController.burst_coefficient(float(area_m2))
+        em = self.emitters.add(
+            name, node, "burst", C, exponent=0.5, start_tick=self._abs_tick,
+            duration_ticks=None)
+        return em.payload()
+
+    def set_leakage(self, coefficient_per_km: float) -> dict:
+        """Seed distributed background leakage: a FAVAD emitter
+        (``mdot = C·p^1.15``) at every NETWORK junction, ``C`` proportional
+        to the incident pipe length. Rising ``coefficient_per_km`` raises
+        the night minimum flow (MNF); lowering pressure then measurably
+        cuts the loss (pressure management). Clears any previous leak set.
+        Head-source nodes (tank/ext_grid) are excluded — a leak on the
+        fixed-pressure boundary is meaningless (as with consumers)."""
+        for nm in [n for n, e in self.emitters.emitters.items()
+                   if e.kind == "leak"]:
+            self.emitters.remove(nm)
+        self.leak_coefficient_per_km = float(coefficient_per_km)
+        head_nodes = {m["node"] for m in self.index.producer_meta
+                      if m["kind"] in ("slack", "tank")}
+        # half the incident pipe length attaches to each end node
+        incident_km: dict[str, float] = {}
+        for p in self.inputs.pipes.pipes:
+            for nd in (p.from_node, p.to_node):
+                incident_km[nd] = incident_km.get(nd, 0.0) + 0.5 * p.length_km
+        n = 0
+        for node, km in incident_km.items():
+            if (km <= 0 or node not in self.index.junction
+                    or node in head_nodes):
+                continue
+            C = float(coefficient_per_km) * km
+            if C <= 0:
+                continue
+            self.emitters.add(f"Leckage {node}", node, "leak", C,
+                              exponent=1.15, start_tick=self._abs_tick,
+                              duration_ticks=None)
+            n += 1
+        return {"leaks": n, "coefficient_per_km": float(coefficient_per_km)}
+
+    def remove_emitter(self, name: str) -> bool:
+        return self.emitters.remove(name)
+
+    def clear_leakage(self) -> int:
+        names = [n for n, e in self.emitters.emitters.items()
+                 if e.kind == "leak"]
+        for nm in names:
+            self.emitters.remove(nm)
+        return len(names)
+
     # -- operations reset (scenario load / bulk-export replay) -----------------
 
     def reset_operations(self) -> None:
@@ -776,6 +1003,13 @@ class Simulator:
             self._rebuild_demand_profiles()
         # compliance rolling state fresh (sustained/stagnation windows)
         self.compliance.reset()
+        # M5 emitters are run-state (a live burst / open hydrant) — a
+        # deterministic replay starts clean; the scenario recipe re-adds
+        # its own emitter actions afterwards
+        self.emitters.clear()
+        self.leak_coefficient_per_km = 0.0
+        if len(self.index.consumers):
+            self.net.sink.loc[self.index.consumers, "scaling"] = 1.0
 
     # -- derived quantities & wire payload -------------------------------------
 
@@ -790,7 +1024,8 @@ class Simulator:
 
         # the four ground-truth wire keys + aux — shared with the forward
         # observer (estimator.py) so twin and truth use the same formulas
-        physics = collect_physics(net, idx, tanks=self.tanks)
+        physics = collect_physics(net, idx, tanks=self.tanks,
+                                  emitters=self.emitters)
         worst_pos = physics["aux"]["worst_pos"]
 
         producers = []
@@ -858,6 +1093,10 @@ class Simulator:
             "consumers": physics["consumers"],
             "producers": producers,
             "tanks": [t.payload() for t in self.tanks],
+            # M5 emitters (leaks/hydrants/bursts) — station SCADA-like
+            # equipment, kept on the wire in strict mode (an operator sees
+            # an open hydrant / a reported burst)
+            "emitters": [e.payload() for e in self.emitters.emitters.values()],
             "summary": physics["summary"],
             "controls": self._controls_dict(),
         }

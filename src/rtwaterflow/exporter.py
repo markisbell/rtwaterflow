@@ -26,6 +26,15 @@ history. This is deliberate (the export is a deterministic from-midnight
 replay, not a snapshot of a warm live state); it is called out in
 ``docs/COMPLIANCE.md``.
 
+Emitter caveat (M5): ``reset_operations`` also clears live emitters
+(hydrants/bursts/leakage are run-state, not the bundle). So a session with
+a live hydrant exports WITHOUT it — ``emitters.csv`` is empty and the
+``summary`` ``mdot_emitted``/``mdot_deficit`` columns differ from the live
+pack — UNLESS the emitters were saved in a scenario recipe (which the
+replay restores). Same from-midnight-replay doctrine; live-vs-export
+byte-compat holds only for a run with no live emitters or one driven
+entirely from a scenario recipe.
+
 One export at a time (the API maps a second start to 409); progress is
 polled via ``status()`` (steps done/total, ETA) and a run can be cancelled
 between steps (the partial pack is finalized and marked).

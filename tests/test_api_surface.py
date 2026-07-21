@@ -15,20 +15,24 @@ from rtwaterflow.api import create_app
 from rtwaterflow.api.runtime import API_VERSION
 
 # ---------------------------------------------------------------------------
-# THE M4 SURFACE (50 routes). Deliberately exhaustive and alphabetical —
+# THE M5 SURFACE (58 routes). Deliberately exhaustive and alphabetical —
 # change the API, change this list, consciously. The fork parent's thermal
 # routes (weather, heatingcurve, dpcontrol, storage, bypass, loadgen,
 # producer CRUD) were removed in M0; M2 added the water asset routes
 # (GET /tanks, GET /stations, POST /station/{name}); M3 added the weather
-# knob (GET/POST /environment); M4 the alarm center (GET /findings).
+# knob (GET/POST /environment); M4 the alarm center (GET /findings); M5 the
+# pressure-dependent hydraulics (emitters + PDA toggle).
 # ---------------------------------------------------------------------------
 EXPECTED = {
     ("DELETE", "/consumer/{consumer_id}"),
+    ("DELETE", "/emitter/{name}"),
+    ("DELETE", "/leakage"),
     ("DELETE", "/measurements/consumer/{consumer_id}"),
     ("DELETE", "/measurements/node/{node_id}"),
     ("DELETE", "/recordings/{rid}"),
     ("DELETE", "/scenarios/{sid}"),
     ("GET", "/"),
+    ("GET", "/emitters"),
     ("GET", "/export"),
     ("GET", "/recording"),
     ("GET", "/recordings"),
@@ -44,12 +48,14 @@ EXPECTED = {
     ("GET", "/network"),
     ("GET", "/networks"),
     ("GET", "/networks/{network_id}"),
+    ("GET", "/pda"),
     ("GET", "/producers"),
     ("GET", "/scenarios"),
     ("GET", "/state"),
     ("GET", "/stations"),
     ("GET", "/status"),
     ("GET", "/tanks"),
+    ("POST", "/burst"),
     ("POST", "/config/apply"),
     ("POST", "/consumer"),
     ("POST", "/control/interval"),
@@ -62,11 +68,14 @@ EXPECTED = {
     ("POST", "/estimation/config"),
     ("POST", "/export/cancel"),
     ("POST", "/export/days"),
+    ("POST", "/hydrant"),
+    ("POST", "/leakage"),
     ("POST", "/measurements/consumer/{consumer_id}"),
     ("POST", "/measurements/mode"),
     ("POST", "/measurements/node/{node_id}"),
     ("POST", "/measurements/preset"),
     ("POST", "/networks/import"),
+    ("POST", "/pda"),
     ("POST", "/recording/start"),
     ("POST", "/recording/stop"),
     ("POST", "/scenarios"),

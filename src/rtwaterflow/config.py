@@ -35,6 +35,10 @@ class Settings(BaseSettings):
 
     # --- solver ---
     solver_iter: int = 100  # base iter for retry-ladder tier 1; tiers 2/3 use 3x
+    # pressure-driven demand (M5): consumers deliver less than demand when
+    # pressure falls (Wagner), instead of the M0 fixed-demand negative-
+    # pressure artefact. Toggleable so the "why PDA" contrast is teachable.
+    pda_enabled: bool = True
 
     # --- observability ---
     expose_ground_truth: bool = True  # false = strict mode (ground truth stripped)

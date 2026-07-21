@@ -236,6 +236,13 @@ button.ghost {
 /* equipment emoji markers (interactive — unlike the decorative plant icon) */
 .equip-icon { font-size: 15px; line-height: 1; white-space: nowrap;
   cursor: pointer; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+/* M5 emitter markers (hydrant/burst) — slightly larger, alarming */
+.emitter-icon { font-size: 17px; line-height: 1; white-space: nowrap;
+  cursor: pointer; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+/* tiny inline remove-x button in section rows */
+.mini-x { background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: 0.72rem; padding: 0 2px; }
+.mini-x:hover { color: #ef4444; }
 
 /* small numeric config inputs in sections */
 .num-input {

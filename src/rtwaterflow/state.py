@@ -61,6 +61,15 @@ class StateStore:
             # error details carry solver internals (residuals, element names)
             # — ground truth by another name. Keep the key, blank the detail.
             payload["error"] = None
+            # M5: hydrants/bursts are equipment SCADA (an operator sees
+            # them), but background LEAKS are hidden reality — publishing
+            # their node/coefficient/flow would leak the truth an operator
+            # is trying to DETECT (via MNF). Strip leak emitters in strict
+            # mode (M5 review).
+            emitters = payload.get("emitters")
+            if emitters:
+                payload["emitters"] = [e for e in emitters
+                                       if e.get("kind") != "leak"]
         return payload
 
     def frame(self, result: StepResult) -> dict:

@@ -58,6 +58,22 @@ def scenarios_save(req: ScenarioSaveRequest) -> dict:
         "network_id": app.active.get("network_id", app.network_id),
         "stations": dict(sim.station_modes),   # operator overrides (config)
         "environment": sim.environment.as_dict(),   # M3 weather overrides
+        # M5 pressure-dependent hydraulics: the PDA toggle, the background
+        # leakage coefficient, and the live hydrants/bursts (re-opened with
+        # a fresh duration on load — recipes keep configuration, not the
+        # remaining countdown)
+        "hydraulics": {
+            "pda_enabled": sim.pda.enabled,
+            "leak_coefficient_per_km": sim.leak_coefficient_per_km,
+            "hydrants": [
+                {"node": e.node, "target_m3_h": e.target_m3_h,
+                 "name": e.name, "duration_ticks": e.duration_ticks}
+                for e in sim.emitters.emitters.values()
+                if e.kind == "hydrant"],
+            "bursts": [
+                {"node": e.node, "coefficient": e.coefficient, "name": e.name}
+                for e in sim.emitters.emitters.values() if e.kind == "burst"],
+        },
         "consumer_ops": list(sim.consumer_ops),
         # sensor placement: meters are stored by consumer NAME (element ids
         # shift across replay; the consumer-op replay recreates the same
@@ -124,6 +140,38 @@ async def scenarios_load(sid: str) -> dict:
         except Exception:  # noqa: BLE001
             log.warning("scenario '%s': skipped environment overrides %s",
                         sid, env)
+
+    # 1d) M5 pressure-dependent hydraulics (config; tolerant PER ENTRY —
+    # a single stale emitter must not abort the rest of the block, matching
+    # the consumer-ops replay discipline). A saved hydrant re-opens with a
+    # FRESH countdown of its original duration.
+    hyd = doc.get("hydraulics") or {}
+    if "pda_enabled" in hyd:
+        try:
+            sim.set_pda(bool(hyd["pda_enabled"]))
+        except Exception:  # noqa: BLE001
+            log.warning("scenario '%s': skipped pda flag", sid)
+    if hyd.get("leak_coefficient_per_km"):
+        try:
+            sim.set_leakage(float(hyd["leak_coefficient_per_km"]))
+        except Exception:  # noqa: BLE001
+            log.warning("scenario '%s': skipped leakage", sid)
+    for h in hyd.get("hydrants", []):
+        try:
+            sim.open_hydrant(node=h["node"],
+                             target_m3_h=float(h["target_m3_h"]),
+                             duration_ticks=h.get("duration_ticks"),
+                             name=h.get("name"))
+        except Exception:  # noqa: BLE001
+            log.warning("scenario '%s': skipped hydrant %s", sid, h)
+    for b in hyd.get("bursts", []):
+        try:
+            sim.emitters.add(
+                b.get("name") or f"Rohrbruch {b['node']}", b["node"],
+                "burst", float(b["coefficient"]), exponent=0.5,
+                start_tick=sim._abs_tick, duration_ticks=None)
+        except Exception:  # noqa: BLE001
+            log.warning("scenario '%s': skipped burst %s", sid, b)
 
     # 2) runtime consumer ops, tolerant per entry
     for op in doc.get("consumer_ops", []):

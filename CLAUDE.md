@@ -493,8 +493,74 @@ noted in `docs/COMPLIANCE.md` + the exporter docstring). Fire-flow checks
 at hydrants, loss KPIs, water-right and surge advisories are deferred to
 their milestones (M5/M6/M9).
 
-- Next: **M5 — PDA, emitters, scenario library** (roadmap §6, §4.3/§4.4):
-  Wagner pressure-driven demand (undersupply → dry taps, not negative
-  pressures), emitter controller (leaks/hydrants/bursts C·√p), and the
-  scenario recipes (fire test, burst, leakage + MNF, pump failure, heat
-  wave, drought cap).
+### 2026-07-21 — M5: PDA, emitters, scenario library (branch `m0-fork-strip`)
+
+**Built** (roadmap §6 M5, §4.3/§4.4; TF §7/§8):
+
+- **PDAController** (`hydraulics/pda.py`): Wagner pressure-driven demand.
+  `factor(p) = 0` at `p ≤ p_min` (0.5 bar), `((p−p_min)/(p_req−p_min))^0.5`,
+  `1` at `p ≥ p_req` (the W 400-1 storey requirement, read live from the
+  M4 compliance table). Undersupplied taps deliver less (`sink.scaling`)
+  instead of the M0 fixed-demand negative-pressure artefact; a
+  `pda_enabled` toggle keeps the "why PDA" contrast teachable.
+- **EmitterController** (`hydraulics/emitters.py`): one
+  `mdot = C·max(p,0)^N1` mechanism — hydrant (C from a target flow at the
+  node's pressure, floored at a plausible service head, capped at the
+  rated target; N1 0.5), burst (`C = Cd·A·√(2ρ)`, Cd 0.75), leak (FAVAD
+  N1 1.15, one per NETWORK junction ∝ incident pipe length; head sources
+  excluded). add/remove/clear + absolute-tick expiry.
+- **The M5 solve strategy** (`Simulator._solve_step`): the M2 station loop
+  is now `_solve_hydraulic`, wrapped in the PDA+emitter outer fixed point —
+  each pass measures the Wagner CONSISTENCY GAP
+  (`max|factor(p)−scaling|` + `max|C·p^N1 − emitter mdot|`), breaks when
+  consistent (`TOL`), else a DAMPED update (`DAMP` 0.4) + re-solve, cap 20.
+  A **physical-validity guard** (M5 review): a self-consistent state with
+  negative gauge pressure (an emitter cratering OTHER junctions) is
+  downgraded to `degraded` — an "ok" frame never reports impossible
+  negatives. Healthy nets are a NO-OP (all factors 1, no emitters).
+- **Wire**: summary gains `mdot_deficit` (unmet demand) + `mdot_emitted`;
+  balance = feed − delivered − stored − spill − exported − emitted.
+  `StepResult.emitters` — hydrants/bursts are equipment SCADA (on the wire
+  in strict mode), background LEAKS are hidden reality (stripped in strict
+  mode — the MNF the operator must DETECT). `emitters.csv` in recordings.
+- **API** (58 routes): GET /emitters, POST /hydrant|/burst|/leakage,
+  DELETE /leakage|/emitter/{name}, GET|POST /pda. Scenario recipes carry a
+  `hydraulics` block (PDA toggle, leak coefficient, hydrants with a fresh
+  duration, bursts), applied per-entry-tolerantly on load.
+- **W 405 fire-flow compliance** (the M4 catalog's deferred check): a
+  drawing hydrant node < 1.5 bar or delivering < 90 % of target → violation.
+- **UI**: EventSection (PDA toggle + Hitze-warning, hydrant/burst/leakage
+  buttons, node picker, deficit + withdrawal read-outs, live emitter list
+  with remove), MapDiagram 🚒/💥 emitter markers, i18n `event.*` DE/EN.
+
+**Tests: 190 backend ×2 + 23 vitest**; tsc strict + vite build green;
+API.md 58 routes. **Hydrant EPANET oracle** (`test_hydrant_oracle.py`):
+3 cases match WNTR node pressure within 0.1 bar (emitter coefficient
+`C_e = (C/ρ)·(ρg/1e5)^0.5`), so the fire-flow pass/fail vs the 1.5 bar
+rule agrees with EPANET. PDA verified: no-op on healthy nets, graceful
+starvation (14 kg/s overload → 2.72 kg/s deficit at a positive 1.5 bar),
+negative-pressure contrast with PDA off; leakage raises the leak rate,
+"repair" halves it.
+
+**Adversarial review** (3 lenses + per-finding verification, 15 agents):
+12 confirmed / 0 refuted — all fixed + regression-pinned. Headline: the
+PDA/emitter fixed point checked self-consistency but not pressure
+VALIDITY, so a burst could report negative pressures in an "ok" frame →
+added the validity guard (now honestly "degraded"). Plus: emitter expiry
+now uses an absolute (unwrapped) tick — a timed hydrant expired never /
+wrongly across day boundaries; leaks no longer seeded on head-source
+nodes; hydrant coefficient sized off a service-pressure floor + capped at
+target; strict mode hides leak emitters; scenario hydraulics block
+per-entry tolerant with a fresh hydrant duration; emitter tooltip XSS
+escaped; EventSection busy-guard thunked; export/emitter byte-compat
+caveat documented; EPANET oracle artifacts written to tmp not the repo.
+
+**Deviation (documented):** very stiff undersupply (a huge single-node
+draw, or a burst that craters the zone) that the damped fixed point cannot
+settle in 20 iterations is honestly reported `degraded` (never a false
+"ok" / never a 500); the warm-started next tick usually settles.
+
+- Next: **M6 — wells & aquifer** (roadmap §6, §4.5): WellField/Aquifer
+  (linear-reservoir drawdown, ageing, water rights, energy KPI), break-tank
+  coupling, the Lauenau drought scenario (source cap < peak demand → tank
+  empties → unsupplied households).

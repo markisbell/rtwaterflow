@@ -75,6 +75,9 @@ _ELEMENT_FILES = (
     ("findings", "findings.csv",
      ("severity", "rule", "check", "entity_kind", "entity", "value",
       "threshold", "since_ticks", "text_de")),
+    ("emitters", "emitters.csv",
+     ("name", "node", "kind", "coefficient", "exponent", "target_m3_h",
+      "expires_tick", "mdot_kg_per_s", "m3_per_h")),
 )
 # the Gemessen layer (measurements.consumers / measurements.nodes lists)
 _MEAS_FILES = (

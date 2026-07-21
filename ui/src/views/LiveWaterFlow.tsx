@@ -13,6 +13,7 @@ import AlarmSection from "../components/AlarmSection";
 import WorstPointSection from "../components/WorstPointSection";
 import TankSection from "../components/TankSection";
 import EnvironmentSection from "../components/EnvironmentSection";
+import EventSection from "../components/EventSection";
 import ConsumerTableSection from "../components/ConsumerTableSection";
 import DrucklinieSection from "../components/DrucklinieSection";
 import MeasurementPanel from "../components/MeasurementPanel";
@@ -41,6 +42,7 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
   const [alOpen, setAlOpen] = useState(true);
   const [wpOpen, setWpOpen] = useState(true);
   const [tkOpen, setTkOpen] = useState(true);
+  const [evOpen, setEvOpen] = useState(false);
   const [envOpen, setEnvOpen] = useState(true);
   const [ctOpen, setCtOpen] = useState(false);
   const [hglOpen, setHglOpen] = useState(true);
@@ -251,6 +253,9 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
         <EnvironmentSection open={envOpen}
                             onToggle={() => setEnvOpen((v) => !v)}
                             topo={topo} />
+
+        <EventSection open={evOpen} onToggle={() => setEvOpen((v) => !v)}
+                      topo={topo} latest={latest} />
 
         <ConsumerTableSection open={ctOpen}
                               onToggle={() => setCtOpen((v) => !v)}
