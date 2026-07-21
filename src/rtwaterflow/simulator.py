@@ -567,10 +567,9 @@ class Simulator:
         # tank levels are station SCADA — always observed (TF §7)
         self.rules.evaluate(self.net, self._tanks_by_name, self.station_modes)
         # M6 raw-water side: run the well fields (fill the break tanks,
-        # capped by the aquifer) and apply low-level pump protection —
-        # pre-solve, so the break-tank head + the network pump state this
-        # tick reflect the raw supply
-        self._step_wellfields()
+        # capped by the aquifer) pre-solve, so the break-tank head + the
+        # network pump state this tick reflect the raw supply
+        empty_break_nodes = self._step_wellfields()
         # manual stations without a rule follow their mode directly; their
         # "auto" means the CONFIGURED state (control.running) — without this
         # write nothing ever touches in_service again and a check-valve
@@ -587,17 +586,26 @@ class Simulator:
                 if spec is not None:
                     self.net.pump.at[meta["element"], "in_service"] = bool(
                         spec.control.running)
+        # low-level (dry-run) pump protection is a HARDWARE INTERLOCK —
+        # re-asserted LAST so a manual operator 'on' cannot run a network
+        # pump on an empty break tank (which, being an ext_grid, would
+        # supply phantom water it does not have — M6 review)
+        for meta in self._break_suction_stations:
+            if meta["from_node"] in empty_break_nodes:
+                self.net.pump.at[meta["element"], "in_service"] = False
 
-    def _step_wellfields(self) -> None:
+    def _step_wellfields(self) -> set[str]:
         """Run each well field pre-solve: the well pumps fill the break tank
-        on two-point hysteresis (capped by the aquifer), the aquifer steps,
-        and the network pump drawing FROM a break tank trips when it runs
-        empty (low-level protection — the Lauenau cascade)."""
+        on two-point hysteresis (capped by the aquifer), the aquifer steps.
+        Returns the nodes of break tanks that are empty (their network pump
+        must be tripped by the caller AFTER the operator-mode writes)."""
         if not self.wellfields:
-            return
+            return set()
         doy = ((self.inputs.environment.season_day_of_year - 1
                 + self._cur_day) % 365) + 1
-        empty_break_nodes: set[str] = set()
+        # accumulate the inflow — several fields may feed ONE break tank
+        # (assigning would drop all but the last, destroying mass — review)
+        inflow_by_tank: dict[str, float] = {}
         for wf in self.wellfields:
             tank = self._tanks_by_name.get(wf.break_tank_name)
             if tank is None:
@@ -614,14 +622,15 @@ class Simulator:
             demand_m3_h = 1e6 if running else 0.0
             inflow = wf.produce(demand_m3_h=demand_m3_h, day=self._cur_day,
                                 day_of_year=doy, dt_s=self._dt_s)
-            tank.external_inflow_kg_per_s = inflow
+            inflow_by_tank[tank.node] = inflow_by_tank.get(tank.node, 0.0) + inflow
+        empty_break_nodes: set[str] = set()
+        for tank in self.tanks:
+            if tank.kind != "break":
+                continue
+            tank.external_inflow_kg_per_s = inflow_by_tank.get(tank.node, 0.0)
             if tank.level_m <= tank.level_min_m + 1e-6:
                 empty_break_nodes.add(tank.node)
-        # low-level pump protection: a network pump whose suction break tank
-        # is empty must not run (it would cavitate) — trip it
-        for meta in self._break_suction_stations:
-            if meta["from_node"] in empty_break_nodes:
-                self.net.pump.at[meta["element"], "in_service"] = False
+        return empty_break_nodes
 
     # -- the step ------------------------------------------------------------
 

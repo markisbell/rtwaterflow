@@ -571,7 +571,7 @@ settle in 20 iterations is honestly reported `degraded` (never a false
   `dh/dt = (recharge·drought − ΣQ)/(S_y·A)`, seasonal recharge cosine
   peaking mid-winter, drought factor); `Well` (drawdown `Q/(Q/s)`,
   filter-screen protection caps the yield, ageing erodes `Q/s` faster at
-  deep drawdown, `regenerate` → 90 %, Sichardt mutual interference);
+  deep drawdown, `regenerate` → 95 %, Sichardt mutual interference);
   `WellField` (aggregates, produces the break-tank inflow, books the
   water right (WHG §§8–10) + energy `kWh/m³`).
 - **Coupling**: a `TankSpec` kind `"break"` is the Reinwasserbehälter;
@@ -595,7 +595,8 @@ settle in 20 iterations is honestly reported `degraded` (never a false
   14 m³/h wells; a deliberately small "shallow teaching aquifer" so the
   drought decline is visible over the sim's fast-forward days, TF §5).
 
-**Tests: 203 backend ×2 + 23 vitest**; tsc + vite build green; API.md
+**Tests: 209 backend ×2 + 23 vitest** (+6 review regression pins); tsc +
+vite build green; API.md
 61 routes. Acceptance: Lauenau normal day supplied at 0.385 kWh/m³ (in the
 0.3–1.0 corridor); the drought cascade leaves households unsupplied; the
 seasonal aquifer sawtooth, well ageing/regeneration, filter-screen
@@ -603,15 +604,31 @@ protection (the aquifer cannot fall below screen+margin — the well stops
 first), break-tank mass balance, and the water-right compliance warning
 all pinned.
 
-**Review note:** the adversarial-review workflow was blocked by an
+**Review:** the first adversarial-review workflow attempt was blocked by an
 Anthropic session limit (all three find-agents errored before running), so
-I did a rigorous MANUAL review pass via direct probes instead — which
-found two real defects, both fixed + regression-pinned: (1) the well-pump
-hysteresis memory (`pumps_running`) was a dynamically-added attribute never
-reset, breaking deterministic replay / live-vs-export byte-compat; (2) the
-`interference_fraction` parameter was stored but never applied (dead
-Sichardt physics). The automated multi-agent review is queued to re-run
-once the limit resets; any further findings will land as a follow-up.
+I did a MANUAL review pass first — which found two real defects: the
+well-pump hysteresis memory (`pumps_running`) was a dynamically-added
+attribute never reset (broke deterministic replay / live-vs-export
+byte-compat), and `interference_fraction` was stored but never applied
+(dead Sichardt physics). The automated multi-agent review (3 lenses +
+per-finding verification) then re-ran successfully and surfaced **10**
+confirmed findings — ALL fixed + regression-pinned in this follow-up:
+(1) `regenerate` restored to exactly 90 %, re-tripping the W 130 alarm it
+was meant to clear → now 95 %; (2/7) the break-suction low-level interlock
+was applied inside `_step_wellfields`, so an operator forcing the pump
+`on` in the manual-station loop defeated the safety trip → the trip is now
+re-applied in `_apply_step` AFTER the manual loop (hardware interlock wins);
+(3) the WHG annual counter never rolled over, so a multi-year fast-forward
+accrued a false yearly violation → `last_year_index` rollover added;
+(4) a resting (non-producing) well still aged → ageing gated on `running`;
+(5) `capacity_m3_h` reported the nameplate sum, overstating yield under
+drought → now the interference-aware available-yield sum; (6) two well
+fields feeding ONE break tank overwrote each other's inflow → accumulated
+via an `inflow_by_tank` dict; (8) the UI drought slider snapped back
+mid-drag / showed a stale factor while paused → local optimistic state;
+(9) the capped-production cue under-triggered (followed from #5) → fixed by
+the interference-aware capacity; (10) the regenerate button appeared at
+5 % aged while the label + W 130 warning used 10 % → aligned to 10 %.
 
 **Deviation (documented):** an export replay resets the raw side (aquifer
 level, ageing, counters) — a mid-session day exports from the full

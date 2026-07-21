@@ -123,8 +123,10 @@ class Well:
         self.spec_capacity_now *= (1.0 - self.q_s_decay_per_a * stress) ** years
 
     def regenerate(self) -> None:
-        """Well regeneration (W 130): restore ~90 % of the nameplate Q/s."""
-        self.spec_capacity_now = 0.9 * self.spec_capacity_m3h_per_m
+        """Well regeneration (W 130): restore the specific capacity. 95 %
+        of nameplate — clear of the 10 %-aged compliance threshold, so the
+        maintenance action actually CLEARS the ageing alarm (M6 review)."""
+        self.spec_capacity_now = 0.95 * self.spec_capacity_m3h_per_m
 
     def reset(self) -> None:
         self.spec_capacity_now = float(self.spec_capacity_m3h_per_m)
@@ -156,11 +158,31 @@ class WellField:
     volume_year_m3: float = field(default=0.0)
     last_production_m3_h: float = field(default=0.0)
     last_tick_day: int = field(default=-1)
+    last_year_index: int = field(default=-1)   # for the annual rollover
     #: well-pump hysteresis memory (fill the break tank below on, stop
     #: above off) — MUST reset for deterministic replay (M6 self-review)
     pumps_running: bool = field(default=True)
 
     # -- per-tick production --------------------------------------------------
+
+    def _available_yields(self) -> tuple[list[float], list[float]]:
+        """Per-well interference-aware available yield [m³/h] + the
+        interference drawdown [m] used. Mutual interference (Sichardt cone
+        superposition, TF §5): each well sees a fraction of its neighbours'
+        drawdown, so N wells yield LESS than N× a lone well. One-pass
+        estimate from the standalone drawdowns. At a high aquifer the wells
+        are rated-capped so interference is inert; it bites only once the
+        falling level makes drawdown the limit."""
+        lvl = self.aquifer.level_m
+        base = [w.max_yield_m3_h(lvl) for w in self.wells]
+        base_dd = [b / w.spec_capacity_now if w.spec_capacity_now > 0 else 0.0
+                   for w, b in zip(self.wells, base)]
+        total_dd = sum(base_dd)
+        interf = [self.interference_fraction * (total_dd - base_dd[i])
+                  for i in range(len(self.wells))]
+        avail = [w.max_yield_m3_h(lvl, interference_m=interf[i])
+                 for i, w in enumerate(self.wells)]
+        return avail, interf
 
     def produce(self, demand_m3_h: float, day: int, day_of_year: int,
                 dt_s: float) -> float:
@@ -168,27 +190,20 @@ class WellField:
         the hysteresis rule asks for), capped by the aquifer. Returns the
         raw-water inflow to the break tank [kg/s]. Steps the aquifer,
         ageing, water-right and energy accounting."""
-        # roll the daily abstraction counter at each day change (the annual
-        # counter accumulates across the whole run)
+        # roll the daily counter at each day change and the ANNUAL counter
+        # when the year advances — otherwise a multi-year fast-forward
+        # accumulates a false WHG annual violation (M6 review)
         if day != self.last_tick_day:
             if self.last_tick_day >= 0:          # not the very first tick
                 self.volume_today_m3 = 0.0
             self.last_tick_day = day
+        year_index = day // 365
+        if year_index != self.last_year_index:
+            if self.last_year_index >= 0:
+                self.volume_year_m3 = 0.0
+            self.last_year_index = year_index
 
-        # mutual interference (Sichardt cone superposition, TF §5): each
-        # well sees a fraction of its neighbours' drawdown, so N wells
-        # yield LESS than N× a lone well. One-pass estimate: the standalone
-        # drawdown at each well's own yield, shared to the others. At a high
-        # aquifer the wells are rated-capped so interference is inert; it
-        # bites only once the falling level makes drawdown the limit.
-        base = [w.max_yield_m3_h(self.aquifer.level_m) for w in self.wells]
-        base_dd = [b / w.spec_capacity_now if w.spec_capacity_now > 0 else 0.0
-                   for w, b in zip(self.wells, base)]
-        total_dd = sum(base_dd)
-        interf = [self.interference_fraction * (total_dd - base_dd[i])
-                  for i in range(len(self.wells))]
-        avail = [w.max_yield_m3_h(self.aquifer.level_m, interference_m=interf[i])
-                 for i, w in enumerate(self.wells)]
+        avail, interf = self._available_yields()
         total_avail = sum(avail)
         want = max(0.0, demand_m3_h)
         produced_m3_h = min(want, total_avail)
@@ -204,7 +219,10 @@ class WellField:
                 dd = (w.static_level_m
                       - w.dynamic_level_m(q, self.aquifer.level_m, interf[i]))
                 drawdowns.append(dd)
-                w.age(dt_s, dd)
+                # only a PRODUCING well ages (a resting well sees no
+                # drawdown, no Verockerung stress — M6 review)
+                if w.running:
+                    w.age(dt_s, dd)
         else:
             for w in self.wells:
                 w.running = False
@@ -249,9 +267,9 @@ class WellField:
             "aquifer_level_m": round(self.aquifer.level_m, 3),
             "aquifer_drought_factor": round(self.aquifer.drought_factor, 3),
             "production_m3_h": round(self.last_production_m3_h, 2),
-            "capacity_m3_h": round(
-                sum(w.max_yield_m3_h(self.aquifer.level_m)
-                    for w in self.wells), 2),
+            # interference-aware — the flow production can actually reach
+            # (M6 review: the nameplate sum overstated it under drought)
+            "capacity_m3_h": round(sum(self._available_yields()[0]), 2),
             "energy_kwh_per_m3": (None if self.energy_kwh_per_m3() is None
                                   else round(self.energy_kwh_per_m3(), 3)),
             "n_wells_running": sum(1 for w in self.wells if w.running),
@@ -279,4 +297,5 @@ class WellField:
         self.volume_year_m3 = 0.0
         self.last_production_m3_h = 0.0
         self.last_tick_day = -1
+        self.last_year_index = -1
         self.pumps_running = True

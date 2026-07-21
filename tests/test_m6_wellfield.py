@@ -63,7 +63,9 @@ def test_well_ageing_and_regeneration():
         w.age(dt_s=900.0, drawdown_m=8.0)
     assert w.spec_capacity_now < 2.0 * 0.95      # measurably aged
     w.regenerate()
-    assert w.spec_capacity_now == pytest.approx(0.9 * 2.0)   # ~90 % restored
+    # restores to 95 % — clear of the 10 %-aged W 130 threshold so the
+    # maintenance action CLEARS the alarm rather than re-tripping it (M6 review)
+    assert w.spec_capacity_now == pytest.approx(0.95 * 2.0)
 
 
 def test_well_screen_protection_caps_yield():
@@ -225,6 +227,122 @@ def test_wellfield_api_and_regenerate():
         assert r.json()["well"] == "Brunnen 1"
         assert client.post(
             "/wellfield/nope/well/x/regenerate").status_code == 404
+
+
+# --- M6 adversarial-review regression pins ----------------------------------
+
+def test_regenerate_clears_the_ageing_alarm():
+    """Review #1: regenerating an aged well must CLEAR the W 130 warning, not
+    leave the finding still firing (it now restores to 95 %, below 10 % aged)."""
+    sim = _sim()
+    w = sim.wellfields[0].wells[0]
+    # force the well well past the 10 % threshold, confirm the finding fires
+    w.spec_capacity_now = 0.5 * w.spec_capacity_m3h_per_m   # 50 % aged
+    r = sim.run_step(0, 0)
+    fired = [f for f in r.findings
+             if f["check"] == "well_ageing" and w.name in f["entity"]]
+    assert fired, "a 50 %-aged well should raise the W 130 warning"
+    sim.regenerate_well(sim.wellfields[0].name, w.name)
+    r = sim.run_step(1, 0)
+    aged = next(x["aged_fraction"] for x in r.wellfields[0]["wells"]
+                if x["name"] == w.name)
+    assert aged <= 0.05
+    cleared = [f for f in r.findings
+               if f["check"] == "well_ageing" and w.name in f["entity"]]
+    assert not cleared, "regeneration must clear the ageing alarm"
+
+
+def test_low_level_trip_holds_under_operator_on():
+    """Review #2/#7: the break-suction low-level interlock is HARDWARE — an
+    operator forcing the network pump 'on' must not defeat it (the trip is
+    applied after the manual-station loop, so 'on' cannot win)."""
+    sim = _sim()
+    sim.run_step(0, 0)
+    bt = next(t for t in sim.tanks if t.kind == "break")
+    bt.level_m = bt.level_min_m                   # break tank at the floor
+    meta = sim._break_suction_stations[0]
+    sim.station_modes[meta["name"]] = "on"        # operator overrides to ON
+    sim._apply_step(1)
+    assert not bool(sim.net.pump.at[meta["element"], "in_service"]), \
+        "operator 'on' must not defeat the low-level interlock"
+
+
+def test_water_right_year_counter_rolls_over():
+    """Review #3: the annual abstraction counter must reset at the year
+    boundary — a multi-year fast-forward must not accumulate a false WHG
+    annual violation across years.
+
+    The well produces ~131 400 m³/a (15 m³/h capped). The permit (200 000
+    m³/a) sits ABOVE one year but BELOW the un-rolled two-year sum
+    (~262 800) — so the test passes only if the counter rolls over."""
+    wf = WellField("t", [Well("B1", 100.0, 3.0, 88.0, 15.0)],
+                   Aquifer(9e9, 100.0, 600.0), "bt", 60.0,
+                   right_m3_per_a=200_000.0)
+    peak_year = 0.0
+    for tick in range(2 * 365 * SPD):
+        day = tick // SPD
+        wf.produce(1e6, day=day, day_of_year=(day % 365) + 1, dt_s=900.0)
+        peak_year = max(peak_year, wf.volume_year_m3)
+    # a single year (~131 400 m³) fits the permit; without the rollover the
+    # running total would be ~262 800 m³ and falsely "exceeded"
+    assert wf.volume_year_m3 < 200_000.0
+    assert peak_year < 200_000.0
+    assert wf.volume_year_m3 == pytest.approx(131_400.0, rel=0.02)
+    assert not wf.water_right_status()["year_exceeded"]
+    assert wf.last_year_index == 1                # advanced into the 2nd year
+
+
+def test_only_producing_wells_age():
+    """Review #4: a well that is not pumping sees no drawdown and must not
+    age — only running wells accrue Verockerung stress."""
+    wf = WellField("t",
+                   [Well("A", 100.0, 3.0, 88.0, 15.0),
+                    Well("B", 100.0, 3.0, 88.0, 15.0)],
+                   Aquifer(9e9, 100.0, 600.0), "bt", 60.0)
+    for tick in range(365 * SPD):                 # a year at ZERO demand
+        wf.produce(0.0, tick // SPD, (tick // SPD % 365) + 1, 900.0)
+    assert all(not w.running for w in wf.wells)
+    assert all(w.spec_capacity_now == w.spec_capacity_m3h_per_m
+               for w in wf.wells), "resting wells must not age"
+
+
+def test_capacity_reflects_interference():
+    """Review #5: the reported capacity must be interference-aware — under
+    drought (drawdown-limited) it is BELOW the nameplate sum, because mutual
+    Sichardt interference between wells reduces each one's available yield."""
+    sim = _sim()
+    sim.set_drought(0.0)
+    r = None
+    for day in range(10):
+        for t in range(SPD):
+            r = sim.run_step(t, day)
+    wf = sim.wellfields[0]
+    nameplate = sum(w.rated_m3_h for w in wf.wells)
+    reported = r.wellfields[0]["capacity_m3_h"]
+    assert reported < nameplate, "capacity must reflect interference, not nameplate"
+    # sanity: it equals the interference-aware available-yield sum
+    assert reported == pytest.approx(round(sum(wf._available_yields()[0]), 2))
+
+
+def test_multiple_fields_one_tank_conserve_inflow():
+    """Review #6: two well fields feeding ONE break tank must ADD their
+    inflows — the accumulator must not let the second field overwrite the
+    first (mass would silently vanish)."""
+    from rtwaterflow.assets.wellfield import Aquifer, Well, WellField
+
+    def mk(name):
+        return WellField(name, [Well(f"{name}-1", 100.0, 3.0, 88.0, 20.0)],
+                         Aquifer(9e9, 100.0, 600.0), "shared_bt", 60.0)
+
+    a, b = mk("A"), mk("B")
+    ia = a.produce(50.0, 0, 1, 900.0)             # each field's raw kg/s
+    ib = b.produce(50.0, 0, 1, 900.0)
+    inflow_by_tank: dict[str, float] = {}
+    for wf, inflow in ((a, ia), (b, ib)):
+        inflow_by_tank[wf.break_tank_name] = (
+            inflow_by_tank.get(wf.break_tank_name, 0.0) + inflow)
+    assert inflow_by_tank["shared_bt"] == pytest.approx(ia + ib)
+    assert ia > 0 and ib > 0                       # both actually contributed
 
 
 def test_generator_round_trip_byte_stable(tmp_path, monkeypatch):

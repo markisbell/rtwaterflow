@@ -25,10 +25,16 @@ export default function WellFieldSection({ open, onToggle, latest }: {
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  // local optimistic drought value: while the user drags (drought !== null)
+  // the slider follows the finger and each step POSTs; when no drag is in
+  // flight it reconciles to the wire — so it never snaps back mid-drag or
+  // shows a stale factor while paused (M6 review, mirrors stepSeconds)
+  const [droughtLocal, setDroughtLocal] = useState<number | null>(null);
   const fields = latest?.wellfields ?? [];
   if (!latest || fields.length === 0) return null;
 
-  const drought = fields[0]?.aquifer_drought_factor ?? 1.0;
+  const droughtWire = fields[0]?.aquifer_drought_factor ?? 1.0;
+  const drought = droughtLocal ?? droughtWire;
   const anyExceeded = fields.some(
     (w) => w.water_right.day_exceeded || w.water_right.year_exceeded);
 
@@ -36,6 +42,14 @@ export default function WellFieldSection({ open, onToggle, latest }: {
     if (busy) return;
     setBusy(true);
     make().catch((e) => window.alert(String(e))).finally(() => setBusy(false));
+  };
+
+  const onDrought = (v: number) => {
+    setDroughtLocal(v);                 // follow the finger immediately
+    api.setDrought(v)
+      .catch((e) => window.alert(String(e)))
+      // clear the override once the wire has caught up to this value
+      .finally(() => setDroughtLocal((cur) => (cur === v ? null : cur)));
   };
 
   return (
@@ -48,9 +62,7 @@ export default function WellFieldSection({ open, onToggle, latest }: {
           {drought < 0.5 ? " 🏜" : drought >= 1.0 ? " 💧" : ""}
         </label>
         <input type="range" min={0} max={1.5} step={0.1} value={drought}
-               disabled={busy}
-               onChange={(e) => act(() =>
-                 api.setDrought(Number(e.target.value)))} />
+               onChange={(e) => onDrought(Number(e.target.value))} />
       </div>
 
       {fields.map((wf) => (
@@ -108,7 +120,9 @@ function WellFieldCard({ wf, busy, act }: {
               && <span style={{ color: "#f2ae00" }}> · {t("well.aged", {
                 p: fmt(w.aged_fraction * 100, 0) })}</span>}
           </span>
-          {w.aged_fraction >= 0.05 && (
+          {/* the regenerate button appears at the SAME threshold as the
+              aged label + the W 130 warning (M6 review: they diverged) */}
+          {w.aged_fraction >= 0.10 && (
             <button className="mini-x" disabled={busy}
                     style={{ color: "var(--accent)" }}
                     title={t("well.regenerateTitle")}
