@@ -14,6 +14,7 @@ import type {
 import type { MapLayer } from "../App";
 import type { MenuTarget } from "./ElementMenu";
 import {
+  M3H_PER_KG_S,
   P_HIGH_BAR,
   P_MIN_BAR,
   PRESSURE_GRADIENT,
@@ -83,6 +84,8 @@ export default function MapDiagram({
   const arrowRef = useRef<Map<number, L.Marker>>(new Map());
   const bearingRef = useRef<Map<number, number>>(new Map());
   const prvRef = useRef<Map<number, L.CircleMarker>>(new Map());
+  const stationRef = useRef<Map<number, L.CircleMarker>>(new Map());
+  const tankRef = useRef<Map<number, L.CircleMarker>>(new Map());
   const plantRef = useRef<L.CircleMarker | null>(null);
   const [light, setLight] = useState(true);
 
@@ -146,6 +149,7 @@ export default function MapDiagram({
 
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const row = (k: string, v: string) =>
     `<span style="color:var(--muted)">${k}</span> ${v}`;
 
@@ -213,6 +217,52 @@ export default function MapDiagram({
       + ` <span style="color:var(--muted)">(${t("pop.prvSet")} ${fmt(live.p_set_bar, 2)})</span>`
       + `<br>${row(t("pop.mdot"), `${fmt(live.mdot_kg_per_s, 3)} kg/s`)}`
       + abnormal;
+  };
+
+  const stationPopup = (pid: number, name: string): string => {
+    const { latest: f } = liveRef.current;
+    const head = `<b>${esc(t("tip.station", { name }))}</b>`;
+    const live = f?.producers.find(
+      (p) => p.kind === "station" && p.id === pid);
+    if (!live) return `${head}<br>${t("pop.noData")}`;
+    const state = live.running
+      ? `<span style="color:#3fb950">● ${t("tank.running")}</span>`
+      : `<span style="color:var(--muted)">○ ${t("tank.stopped")}</span>`;
+    const cv = live.cv_closed
+      ? `<br><span style="color:#ef4444">⚠ ${t("tank.cvClosed")}</span>` : "";
+    const body = live.running && live.p_in_bar != null
+      ? `<br>${row(t("pop.prvIn"), `${fmt(live.p_in_bar, 2)} bar`)} → `
+        + row(t("pop.prvOut"), `${fmt(live.p_out_bar, 2)} bar`)
+        + `<br>${row(t("pop.mdot"), `${fmt((live.mdot_kg_per_s ?? 0) * M3H_PER_KG_S, 1)} m³/h`)}`
+      : "";
+    // controls.stations is fresh even on non-converged frames (the
+    // producers list is a stale copy there — M2 review finding)
+    const mode = f?.controls?.stations?.[name] ?? live.mode ?? "auto";
+    return `${head}<br>${state} · ${t(`tank.mode${cap(mode)}`)}`
+      + body + cv;
+  };
+
+  const tankPopup = (node: string, name: string): string => {
+    const { latest: f } = liveRef.current;
+    const head = `<b>${esc(t("tip.tank", { name }))}</b>`;
+    const tk = f?.tanks?.find((x) => x.node === node);
+    if (!tk) return `${head}<br>${t("pop.noData")}`;
+    const flow = (tk.mdot_kg_per_s ?? 0) > 0.001 ? `▲ ${t("tank.inflow")}`
+      : (tk.mdot_kg_per_s ?? 0) < -0.001 ? `▼ ${t("tank.outflow")}`
+      : t("tank.balanced");
+    const alarms = [
+      tk.overflow ? `⚠ ${t("tank.overflow")}` : "",
+      tk.empty ? `⚠ ${t("tank.empty")}` : "",
+      !tk.empty && tk.fire_reserve_breached
+        ? `⚠ ${t("tank.fireReserve", { m3: fmt(tk.fire_reserve_m3, 0) })}` : "",
+    ].filter(Boolean).map((a) => `<br><span style="color:#ef4444">${a}</span>`)
+      .join("");
+    return `${head}<br><span style="color:var(--muted)">${t(`tank.${tk.kind}`)}</span>`
+      + `<br>${row(t("tank.level"), `${fmt(tk.level_m, 2)} m`)} (${fmt(tk.level_min_m, 1)}–${fmt(tk.level_max_m, 1)})`
+      + `<br>${row(t("tank.volume"), `${fmt(tk.volume_m3, 0)} / ${fmt(tk.capacity_m3, 0)} m³`)} · ${flow}`
+      + (tk.buffer_time_h != null
+        ? `<br>${row(t("tank.buffer"), `${fmt(tk.buffer_time_h, 1)} h`)}` : "")
+      + alarms;
   };
 
   // ---- build map + static layers ONCE per topology (and language) -----------
@@ -293,6 +343,49 @@ export default function MapDiagram({
       pm.bindTooltip(t("tip.prv", { name: v.name }));
       pm.bindPopup(() => prvPopup(v.id, v.name), { autoPan: false });
       prvRef.current.set(v.id, pm);
+    }
+
+    // pump stations (Pumpwerke): teal marker at the branch midpoint,
+    // restyled per frame (green running / grey stopped / red CV alarm)
+    stationRef.current.clear();
+    for (const s of topo.stations ?? []) {
+      const a = nodeGeo.get(s.from_node);
+      const b = nodeGeo.get(s.to_node);
+      if (!a || !b) continue;
+      const pos: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const sm = L.circleMarker(pos, {
+        radius: 7, color: "#0e7490", weight: 1.5,
+        fillColor: "#67e8f9", fillOpacity: 1,
+      }).addTo(map);
+      sm.bindTooltip(t("tip.station", { name: s.name }));
+      sm.bindPopup(() => stationPopup(s.id, s.name), { autoPan: false });
+      stationRef.current.set(s.id, sm);
+      L.marker(pos, {
+        icon: L.divIcon({ className: "plant-icon", html: "⚙️",
+                          iconAnchor: [-6, 18] }),
+        interactive: false, keyboard: false,
+      }).addTo(map);
+    }
+
+    // tanks (Hochbehälter / Wassertürme): blue marker at their node —
+    // level/volume/alarms live in the popup + the sidebar tank widget
+    tankRef.current.clear();
+    for (const p of topo.producers.filter((x) => x.kind === "tank")) {
+      const pos = nodeGeo.get(p.node);
+      if (!pos) continue;
+      allPts.push(pos);
+      const tm = L.circleMarker(pos, {
+        radius: 8, color: "#1e40af", weight: 1.5,
+        fillColor: "#60a5fa", fillOpacity: 1,
+      }).addTo(map);
+      tm.bindTooltip(t("tip.tank", { name: p.name }));
+      tm.bindPopup(() => tankPopup(p.node, p.name), { autoPan: false });
+      tankRef.current.set(p.id, tm);
+      L.marker(pos, {
+        icon: L.divIcon({ className: "plant-icon", html: "🗼",
+                          iconAnchor: [-6, 18] }),
+        interactive: false, keyboard: false,
+      }).addTo(map);
     }
 
     // plain nodes (small, always visible): restyled by the pressure layer;
@@ -376,6 +469,8 @@ export default function MapDiagram({
       arrowRef.current.clear();
       bearingRef.current.clear();
       prvRef.current.clear();
+      stationRef.current.clear();
+      tankRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topo, i18n.language]); // rebuild (incl. tooltips) on language change
@@ -534,6 +629,39 @@ export default function MapDiagram({
       if (pm.isPopupOpen()) {
         const v = prvsById.get(id);
         if (v) pm.setPopupContent(prvPopup(v.id, v.name));
+      }
+    }
+
+    // station markers: green while pumping, grey stopped, red CV alarm
+    const stById = new Map((topo.stations ?? []).map((s) => [s.id, s]));
+    for (const [id, sm] of stationRef.current) {
+      const live = f?.producers.find(
+        (p) => p.kind === "station" && p.id === id);
+      if (live?.cv_closed) {
+        sm.setStyle({ fillColor: "#f87171", color: "#b91c1c" });
+      } else if (live?.running) {
+        sm.setStyle({ fillColor: "#4ade80", color: "#166534" });
+      } else {
+        sm.setStyle({ fillColor: "#94a3b8", color: "#475569" });
+      }
+      if (sm.isPopupOpen()) {
+        const s = stById.get(id);
+        if (s) sm.setPopupContent(stationPopup(s.id, s.name));
+      }
+    }
+
+    // tank markers: alarm ring on overflow/empty/fire-reserve breach
+    const tanksByPid = new Map(
+      topo.producers.filter((x) => x.kind === "tank").map((p) => [p.id, p]));
+    for (const [id, tm] of tankRef.current) {
+      const meta = tanksByPid.get(id);
+      const tk = meta ? f?.tanks?.find((x) => x.node === meta.node) : undefined;
+      const alarm = tk && (tk.overflow || tk.empty || tk.fire_reserve_breached);
+      tm.setStyle(alarm
+        ? { fillColor: "#f87171", color: "#b91c1c" }
+        : { fillColor: "#60a5fa", color: "#1e40af" });
+      if (tm.isPopupOpen() && meta) {
+        tm.setPopupContent(tankPopup(meta.node, meta.name));
       }
     }
 

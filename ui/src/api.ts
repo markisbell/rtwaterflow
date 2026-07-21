@@ -13,7 +13,10 @@ import type {
   RecordingInfo,
   RecordingStatus,
   ScenarioInfo,
+  StationInfo,
+  StationMode,
   StepResult,
+  TankState,
   Topology,
 } from "./types";
 
@@ -60,6 +63,13 @@ export const api = {
     post<EngineStatus>("/control/interval", { seconds }),
 
   producers: () => get<Record<string, unknown>[]>("/producers"),
+
+  // ---- tanks + pump stations (M2) ----
+  tanks: () => get<TankState[]>("/tanks"),
+  stations: () => get<StationInfo[]>("/stations"),
+  setStationMode: (name: string, mode: StationMode) =>
+    post<{ name: string; mode: StationMode }>(
+      `/station/${encodeURIComponent(name)}`, { mode }),
 
   // ---- consumers (M0: fixed demand) ----
   addConsumer: (body: {

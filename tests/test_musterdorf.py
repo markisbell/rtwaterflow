@@ -37,10 +37,16 @@ def sim_and_frame(inputs):
 
 def test_contract_and_catalog_resolution(inputs):
     assert inputs.name == "Musterdorf"
-    assert len(inputs.structure.junctions) == 33
-    assert len(inputs.pipes.pipes) == 32
+    assert len(inputs.structure.junctions) == 35   # M2: + ww, ws
+    assert len(inputs.pipes.pipes) == 33           # M2: + Steigleitung ws-hb
     assert len(inputs.consumers.consumers) == 26
     assert len(inputs.supply.prvs) == 1
+    # M2 water assets: Hochbehälter (Durchlauf) + Pumpwerk with hysteresis
+    assert len(inputs.supply.tanks) == 1
+    assert inputs.supply.tanks[0].kind == "durchlauf"
+    assert len(inputs.supply.stations) == 1
+    assert inputs.supply.stations[0].control.mode == "hysteresis"
+    assert inputs.environment.demand_factor is not None
     # catalog resolution: every pipe ends up with concrete hydraulic values
     for p in inputs.pipes.pipes:
         assert p.inner_diameter_mm and p.inner_diameter_mm > 0
@@ -54,16 +60,21 @@ def test_contract_and_catalog_resolution(inputs):
     d110 = next(p for p in inputs.pipes.pipes
                 if p.material == "PE" and p.dn == 110)
     assert d110.inner_diameter_mm == pytest.approx(96.8)
-    # geometry-derived lengths: the whole village spans a plausible 3-5 km
-    assert 3.0 < sum(p.length_km for p in inputs.pipes.pipes) < 5.0
+    # geometry-derived lengths: village + Steigleitung span a plausible 3-6 km
+    assert 3.0 < sum(p.length_km for p in inputs.pipes.pipes) < 6.0
 
 
-def test_solves_tier1_with_closed_balance(sim_and_frame):
+def test_solves_tier1_with_closed_balance(inputs, sim_and_frame):
     _, frame = sim_and_frame
     assert frame.converged and frame.solver_status == "ok"
     s = frame.summary
-    assert s["mdot_feed_kg_per_s"] == pytest.approx(3.09, abs=1e-6)
-    # mass balance closes < 0.1 % (M1 acceptance)
+    # M2: demand is base x the diurnal factor of tick 0 (from the contract,
+    # never hardcoded — the generator owns the profile)
+    f0 = float(inputs.environment.demand_factor[0])
+    assert s["mdot_demand_kg_per_s"] == pytest.approx(3.09 * f0, abs=1e-6)
+    assert s["mdot_delivered_kg_per_s"] == pytest.approx(3.09 * f0, abs=1e-6)
+    # M2 balance: feed = delivered + stored (the Hochbehälter charges while
+    # the Pumpwerk runs; closure < 0.1 % of feed — M1 acceptance kept)
     assert abs(s["balance_err_kg_per_s"]) / s["mdot_feed_kg_per_s"] < 1e-3
 
 
@@ -86,7 +97,7 @@ def test_zone_pressures_in_dvgw_bands(inputs, sim_and_frame):
     assert 4.0 <= statistics.median(low) <= 6.0
 
 
-def test_prv_holds_the_low_zone(sim_and_frame):
+def test_prv_holds_the_low_zone(inputs, sim_and_frame):
     """The Druckminderer is the zone boundary: 2.8 bar held at its outlet
     while the inlet arrives ~5 bar higher (the 75 m drop from the tank).
     The wire is honest telemetry: SOLVED p_out (not the setpoint echo),
@@ -97,8 +108,10 @@ def test_prv_holds_the_low_zone(sim_and_frame):
     assert prv["p_set_bar"] == pytest.approx(2.8)
     assert prv["p_out_bar"] == pytest.approx(2.8, abs=1e-3)  # solved value
     assert prv["p_in_bar"] > prv["p_out_bar"] + 3.0
-    # the whole low zone flows through it, forward (signed on the wire)
-    assert prv["mdot_kg_per_s"] == pytest.approx(2.44, abs=0.01)
+    # the whole low zone flows through it, forward (signed on the wire);
+    # 2.44 kg/s is the low-zone base demand, scaled by the tick-0 factor
+    f0 = float(inputs.environment.demand_factor[0])
+    assert prv["mdot_kg_per_s"] == pytest.approx(2.44 * f0, abs=0.01)
     assert prv["mdot_kg_per_s"] > 0
     assert prv["reducing"] is True
     ps = {j["name"]: j["p_bar"] for j in frame.junctions}
@@ -177,9 +190,13 @@ def test_topology_carries_prvs_and_catalog_sizing(sim_and_frame):
 
     sim, _ = sim_and_frame
     topo = build_topology("musterdorf", sim)
+    # pid order M2: slack (ww) 0, tank (hb) 1, prv 2, station 3
     assert topo["prvs"] == [{
-        "id": 1, "name": "Druckminderer Talstraße",
+        "id": 2, "name": "Druckminderer Talstraße",
         "from_node": "dm_i", "to_node": "dm_o"}]
+    assert topo["stations"] == [{
+        "id": 3, "name": "Pumpwerk Mustertal",
+        "from_node": "ww", "to_node": "ws"}]
     d110 = next(tr for tr in topo["trenches"]
                 if tr["material"] == "PE" and tr["dn"] == 110)
     assert d110["inner_diameter_mm"] == pytest.approx(96.8)
@@ -223,4 +240,6 @@ def test_strict_mode_keeps_station_scada(sim_and_frame):
     frame = store.frame(sim.run_step(1, 0))
     assert "junctions" not in frame          # truth stripped
     kinds = {p["kind"] for p in frame["producers"]}
-    assert kinds == {"slack", "prv"}         # station SCADA stays
+    # M2: tanks + pump stations are station SCADA too (levels/switchgear
+    # are always telemetered in a real waterworks)
+    assert kinds == {"slack", "tank", "prv", "station"}

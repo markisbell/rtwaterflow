@@ -37,7 +37,9 @@ OUT = Path(__file__).resolve().parents[1] / "data" / "networks" / "musterdorf"
 # ---------------------------------------------------------------------------
 
 NODES: dict[str, tuple[float, float, float]] = {
-    # tank + Zubringer
+    # waterworks (suction side of the pump station, M2) + tank + Zubringer
+    "ww":   (49.4500, 9.0055, 336.0),
+    "ws":   (49.4502, 9.0057, 336.0),
     "hb":   (49.4600, 9.0000, 420.0),
     "z1":   (49.4593, 9.0012, 403.0),
     # Hochzone (branched streets, 363-385 m)
@@ -88,6 +90,8 @@ CONSUMER_NODES = {
 # ---------------------------------------------------------------------------
 
 PIPES: list[tuple[str, str, int, str, int]] = [
+    # Steigleitung: pump discharge up to the tank (M2)
+    ("ws", "hb", 150, "GGG", 1994),
     # Zubringer + Hochzone (ductile iron mains, PE side streets)
     ("hb", "z1", 150, "GGG", 1992),
     ("z1", "h1", 150, "GGG", 1992),
@@ -162,6 +166,42 @@ CONSUMERS: dict[str, tuple[str, float, str, int]] = {
 STEPS = 96             # 15-min environment resolution, one day
 RES_MIN = 15
 
+#: typical German residential diurnal factors per hour (TF §6: night valley
+#: 02-04, morning peak 07-08, evening peak 19-20); mean ≈ 0.94
+HOURLY_FACTOR = [
+    0.42, 0.38, 0.35, 0.36, 0.45, 0.65, 1.10, 1.60,
+    1.45, 1.20, 1.10, 1.15, 1.20, 1.10, 0.95, 0.90,
+    0.95, 1.10, 1.30, 1.45, 1.30, 1.00, 0.70, 0.50,
+]
+
+#: tank + hysteresis band (level metres above the tank bottom at 420 m)
+TANK = dict(area_m2=60.0, level_min_m=1.0, level_max_m=4.6,
+            level_initial_m=3.2, fire_reserve_m3=48.0)
+PUMP_BAND = dict(on_below_m=2.4, off_above_m=4.2)
+
+#: high zone reference head [m]: tank bottom + initial level
+_HEAD_HIGH = 420.0 + TANK["level_initial_m"]
+#: low zone reference head [m]: PRV outlet 2.8 bar at 345 m
+_PRV_M = 345.0
+_PRV_BAR = 2.8
+_BAR_PER_M = 0.0979
+
+HIGH_ZONE = {"hb", "z1", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8",
+             "h9", "h10", "h11", "dm_i"}
+
+
+def _pn_bar(name: str, elev: float) -> float:
+    """Hydrostatic init estimate per node — pump nets diverge from a flat
+    cold start (runtime-pinned M2 discovery), so the bundle seeds realistic
+    pressures for the first solve / failure resets."""
+    if name == "ww":
+        return 0.3
+    if name == "ws":
+        return 8.6            # pump discharge toward the tank
+    if name in HIGH_ZONE:
+        return round(max(0.31, (_HEAD_HIGH - elev) * _BAR_PER_M), 2)
+    return round(_PRV_BAR + (_PRV_M - elev) * _BAR_PER_M, 2)
+
 
 def _geometry(a: str, b: str) -> list[list[float]]:
     la, lo, _ = NODES[a]
@@ -176,7 +216,7 @@ def build() -> dict[str, dict]:
                 else "consumer" if name in CONSUMER_NODES else "node")
         junctions.append({
             "name": name, "kind": kind, "geo": [lat, lon],
-            "elevation_m": elev, "pn_bar": 3.0,
+            "elevation_m": elev, "pn_bar": _pn_bar(name, elev),
         })
 
     pipes = [
@@ -193,8 +233,19 @@ def build() -> dict[str, dict]:
 
     supply = {
         "supplies": [
+            {"node": "ww", "name": "Wasserwerk Mustertal (Reinwasser)",
+             "kind": "ext_grid", "p_bar": 0.3},
+        ],
+        "tanks": [
             {"node": "hb", "name": "Hochbehälter Musterberg",
-             "kind": "ext_grid", "p_bar": 0.4},
+             "kind": "durchlauf", **TANK},
+        ],
+        "stations": [
+            {"from_node": "ww", "to_node": "ws",
+             "name": "Pumpwerk Mustertal",
+             "curve": [[0.0, 10.0], [15.0, 9.4], [30.0, 8.4], [45.0, 6.8]],
+             "control": {"mode": "hysteresis",
+                         "tank": "Hochbehälter Musterberg", **PUMP_BAND}},
         ],
         "prvs": [
             {"from_node": "dm_i", "to_node": "dm_o",
@@ -205,8 +256,10 @@ def build() -> dict[str, dict]:
     # deterministic mild diurnal air temperature (M3 demand-driver slot)
     t_air = [round(10.0 - 4.0 * math.cos(2 * math.pi * (i - 8) / STEPS), 2)
              for i in range(STEPS)]
+    factor = [HOURLY_FACTOR[i * 24 // STEPS] for i in range(STEPS)]
     environment = {
         "resolution_minutes": RES_MIN, "steps": STEPS, "t_air_c": t_air,
+        "demand_factor": factor,
     }
 
     return {

@@ -97,7 +97,21 @@ def build_points(state: dict) -> list[Point]:
     for pr in state.get("producers", []):
         p = (base("producer").tag("producer", str(pr["id"]))
              .tag("kind", pr["kind"]).tag("name", pr["name"]))
-        pts.append(_fields(p, pr, ("p_bar", "mdot_kg_per_s")))
+        if pr.get("running") is not None:
+            p = p.field("running", int(bool(pr["running"])))
+        if pr.get("cv_closed") is not None:
+            p = p.field("cv_closed", int(bool(pr["cv_closed"])))
+        pts.append(_fields(p, pr, ("p_bar", "mdot_kg_per_s", "p_set_bar",
+                                   "p_out_bar", "p_in_bar", "level_m")))
+
+    for tk in state.get("tanks", []):
+        p = base("tank").tag("tank", str(tk["id"])).tag("name", tk["name"])
+        for flag in ("overflow", "empty", "fire_reserve_breached"):
+            if tk.get(flag) is not None:
+                p = p.field(flag, int(bool(tk[flag])))
+        pts.append(_fields(p, tk, ("level_m", "volume_m3", "p_bar",
+                                   "mdot_kg_per_s", "mdot_spill_kg_per_s",
+                                   "buffer_time_h")))
 
     return pts
 

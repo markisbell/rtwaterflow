@@ -56,6 +56,7 @@ def scenarios_save(req: ScenarioSaveRequest) -> dict:
         "name": req.name.strip(),
         "description": req.description.strip(),
         "network_id": app.active.get("network_id", app.network_id),
+        "stations": dict(sim.station_modes),   # operator overrides (config)
         "consumer_ops": list(sim.consumer_ops),
         # sensor placement: meters are stored by consumer NAME (element ids
         # shift across replay; the consumer-op replay recreates the same
@@ -103,6 +104,14 @@ async def scenarios_load(sid: str) -> dict:
     # 1) the network (the deterministic base)
     await apply_network(app, gid, "scenario")
     sim = app.sim
+
+    # 1b) station operator modes (config, tolerant per entry)
+    for sname, mode in (doc.get("stations") or {}).items():
+        if sname in sim.station_modes and mode in ("auto", "on", "off"):
+            sim.station_modes[sname] = mode
+        elif sname not in sim.station_modes:
+            log.warning("scenario '%s': no station '%s' for its mode", sid,
+                        sname)
 
     # 2) runtime consumer ops, tolerant per entry
     for op in doc.get("consumer_ops", []):

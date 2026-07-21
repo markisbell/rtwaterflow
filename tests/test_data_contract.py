@@ -202,14 +202,27 @@ def test_environment_length_check():
             resolution_minutes=15, steps=96, t_air_c=[10.0] * 10))
 
 
-# --- exactly one slack (single head source in M0) ---------------------------
+# --- head sources (M2: >= 1 ext_grid or tank; collisions rejected) ----------
 
-def test_second_slack_rejected(hillside_docs):
+def test_colliding_head_sources_rejected(hillside_docs):
+    """Two fixed-pressure elements on ONE junction are a modeling error
+    (which one wins is solver-internal); distinct nodes are legal since M2
+    (multi-source nets: Wasserwerk + Hochbehälter)."""
     docs = hillside_docs
-    docs["supply"]["supplies"].append({
-        "node": "j1", "kind": "ext_grid", "p_bar": 3.0})
-    with pytest.raises(ValidationError, match="exactly one slack"):
+    src_node = docs["supply"]["supplies"][0]["node"]
+    docs["supply"]["supplies"].append(
+        {"node": src_node, "kind": "ext_grid", "p_bar": 3.0})
+    with pytest.raises(ValidationError, match="collide"):
         _rebuild(docs)
+
+
+def test_second_slack_on_distinct_node_accepted(hillside_docs):
+    """M0 forbade a second slack; M2 multi-source nets legalize it."""
+    docs = hillside_docs
+    docs["supply"]["supplies"].append(
+        {"node": "j1", "kind": "ext_grid", "p_bar": 3.0})
+    inputs = _rebuild(docs)
+    assert len(inputs.supply.supplies) == 2
 
 
 def test_no_slack_rejected(hillside_docs):
@@ -217,6 +230,94 @@ def test_no_slack_rejected(hillside_docs):
     docs["supply"]["supplies"] = []
     with pytest.raises(ValidationError):
         _rebuild(docs)
+
+
+# --- M2 station/tank guards (adversarial-review findings, all pinned) -------
+
+_CURVE = [[0.0, 4.5], [10.0, 4.1], [20.0, 3.4], [30.0, 2.4]]
+
+
+def test_consumer_on_head_source_node_rejected(hillside_docs):
+    """A sink ON the fixed-pressure junction is served straight from the
+    boundary and pins the Schlechtpunkt to the source's low gauge head."""
+    docs = hillside_docs
+    src = docs["supply"]["supplies"][0]["node"]
+    docs["consumers"]["consumers"].append(
+        {"node": src, "mdot_kg_per_s": 0.1})
+    with pytest.raises(DataContractError, match="head-source node"):
+        _rebuild(docs)
+
+
+def test_duplicate_station_names_rejected(hillside_docs):
+    """Names are load-bearing keys (std_type registry, station_modes, rule
+    bindings) — a duplicate silently overwrites the first station's curve."""
+    docs = hillside_docs
+    docs["supply"]["stations"] = [
+        {"from_node": "j1", "to_node": "j2", "name": "PW", "curve": _CURVE,
+         "control": {"mode": "manual", "running": True}},
+        {"from_node": "j2", "to_node": "j3", "name": "PW", "curve": _CURVE,
+         "control": {"mode": "manual", "running": True}},
+    ]
+    with pytest.raises(ValidationError, match="station names"):
+        _rebuild(docs)
+
+
+def test_parallel_station_branches_rejected(hillside_docs):
+    """Two pump branches on one node pair: exactly singular Jacobian, every
+    solve fails (upstream pandapipes issue #693) — reject at load."""
+    docs = hillside_docs
+    docs["supply"]["stations"] = [
+        {"from_node": "j1", "to_node": "j2", "name": "A", "curve": _CURVE,
+         "control": {"mode": "manual", "running": True}},
+        {"from_node": "j2", "to_node": "j1", "name": "B", "curve": _CURVE,
+         "control": {"mode": "manual", "running": True}},
+    ]
+    with pytest.raises(ValidationError, match="parallel pump"):
+        _rebuild(docs)
+
+
+def test_pipe_bypassing_station_rejected(hillside_docs):
+    """A pipe path around the pump short-circuits the constant-lift branch
+    into fictional recirculation in 'ok' frames — same cut-edge doctrine as
+    the PRV (M1)."""
+    docs = hillside_docs
+    # j1-j2 already connected by a pipe in the fixture: a station on the
+    # same pair is bypassed by definition
+    docs["supply"]["stations"] = [
+        {"from_node": "j1", "to_node": "j2", "name": "PW", "curve": _CURVE,
+         "control": {"mode": "manual", "running": True}},
+    ]
+    with pytest.raises(DataContractError, match="bypasses the pump"):
+        _rebuild(docs)
+
+
+def test_non_monotone_curve_fit_rejected():
+    """Decreasing POINTS whose degree-2 REGRESSION is convex with an
+    in-range minimum: the engine runs on the fit — reject it, not just the
+    points (review: such a bundle degraded every running tick)."""
+    from rtwaterflow.models import StationSpec
+
+    manual = {"mode": "manual", "running": True}
+    with pytest.raises(ValidationError, match="not strictly decreasing"):
+        StationSpec.model_validate({
+            "from_node": "a", "to_node": "b", "name": "s", "control": manual,
+            "curve": [[0.0, 10.0], [5.0, 6.0], [45.0, 5.5]],
+        })
+    with pytest.raises(ValidationError, match="deviates"):
+        # S-shaped points: the fit stays monotone but misses them by 1.8 bar
+        StationSpec.model_validate({
+            "from_node": "a", "to_node": "b", "name": "s", "control": manual,
+            "curve": [[0.0, 10.0], [15.0, 9.5], [30.0, 3.0], [45.0, 2.5]],
+        })
+    # the shipped curves stay legal
+    StationSpec.model_validate({
+        "from_node": "a", "to_node": "b", "name": "s", "control": manual,
+        "curve": [[0.0, 10.0], [15.0, 9.4], [30.0, 8.4], [45.0, 6.8]],
+    })
+    StationSpec.model_validate({
+        "from_node": "a", "to_node": "b", "name": "s", "control": manual,
+        "curve": _CURVE,
+    })
 
 
 # --- cross-document checks ---------------------------------------------------

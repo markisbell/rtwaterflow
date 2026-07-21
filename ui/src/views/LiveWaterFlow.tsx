@@ -10,6 +10,7 @@ import { useStepStream } from "../useStepStream";
 import MapDiagram from "../components/MapDiagram";
 import OverviewSection from "../components/OverviewSection";
 import WorstPointSection from "../components/WorstPointSection";
+import TankSection from "../components/TankSection";
 import DrucklinieSection from "../components/DrucklinieSection";
 import MeasurementPanel from "../components/MeasurementPanel";
 import ElementMenu, { type MenuAction, type MenuTarget } from "../components/ElementMenu";
@@ -35,6 +36,7 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [ovOpen, setOvOpen] = useState(true);
   const [wpOpen, setWpOpen] = useState(true);
+  const [tkOpen, setTkOpen] = useState(true);
   const [hglOpen, setHglOpen] = useState(true);
   const [msOpen, setMsOpen] = useState(true);
   const [stepSeconds, setStepSeconds] = useState(1); // wall-clock s per sim minute
@@ -230,6 +232,9 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
 
         <WorstPointSection open={wpOpen} onToggle={() => setWpOpen((v) => !v)}
                            latest={latest} trace={pTrace} />
+
+        <TankSection open={tkOpen} onToggle={() => setTkOpen((v) => !v)}
+                     topo={topo} latest={latest} />
 
         <DrucklinieSection open={hglOpen} onToggle={() => setHglOpen((v) => !v)}
                            topo={topo} latest={frame} />

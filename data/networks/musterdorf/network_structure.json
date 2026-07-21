@@ -2,6 +2,26 @@
  "name": "Musterdorf",
  "junctions": [
   {
+   "name": "ww",
+   "kind": "node",
+   "geo": [
+    49.45,
+    9.0055
+   ],
+   "elevation_m": 336.0,
+   "pn_bar": 0.3
+  },
+  {
+   "name": "ws",
+   "kind": "node",
+   "geo": [
+    49.4502,
+    9.0057
+   ],
+   "elevation_m": 336.0,
+   "pn_bar": 8.6
+  },
+  {
    "name": "hb",
    "kind": "source",
    "geo": [
@@ -9,7 +29,7 @@
     9.0
    ],
    "elevation_m": 420.0,
-   "pn_bar": 3.0
+   "pn_bar": 0.31
   },
   {
    "name": "z1",
@@ -19,7 +39,7 @@
     9.0012
    ],
    "elevation_m": 403.0,
-   "pn_bar": 3.0
+   "pn_bar": 1.98
   },
   {
    "name": "h1",
@@ -29,7 +49,7 @@
     9.0022
    ],
    "elevation_m": 385.0,
-   "pn_bar": 3.0
+   "pn_bar": 3.74
   },
   {
    "name": "h2",
@@ -39,7 +59,7 @@
     9.0035
    ],
    "elevation_m": 378.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.43
   },
   {
    "name": "h3",
@@ -49,7 +69,7 @@
     9.0048
    ],
    "elevation_m": 372.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.01
   },
   {
    "name": "h4",
@@ -59,7 +79,7 @@
     9.006
    ],
    "elevation_m": 368.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.4
   },
   {
    "name": "h5",
@@ -69,7 +89,7 @@
     9.0043
    ],
    "elevation_m": 375.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.72
   },
   {
    "name": "h6",
@@ -79,7 +99,7 @@
     9.0055
    ],
    "elevation_m": 370.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.21
   },
   {
    "name": "h7",
@@ -89,7 +109,7 @@
     9.0068
    ],
    "elevation_m": 366.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.6
   },
   {
    "name": "h8",
@@ -99,7 +119,7 @@
     9.004
    ],
    "elevation_m": 380.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.23
   },
   {
    "name": "h9",
@@ -109,7 +129,7 @@
     9.0033
    ],
    "elevation_m": 383.0,
-   "pn_bar": 3.0
+   "pn_bar": 3.94
   },
   {
    "name": "h10",
@@ -119,7 +139,7 @@
     9.0047
    ],
    "elevation_m": 373.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.91
   },
   {
    "name": "h11",
@@ -129,7 +149,7 @@
     9.0075
    ],
    "elevation_m": 363.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.89
   },
   {
    "name": "dm_i",
@@ -139,7 +159,7 @@
     9.0075
    ],
    "elevation_m": 345.0,
-   "pn_bar": 3.0
+   "pn_bar": 7.66
   },
   {
    "name": "dm_o",
@@ -149,7 +169,7 @@
     9.0076
    ],
    "elevation_m": 345.0,
-   "pn_bar": 3.0
+   "pn_bar": 2.8
   },
   {
    "name": "r1",
@@ -159,7 +179,7 @@
     9.0085
    ],
    "elevation_m": 332.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.07
   },
   {
    "name": "r2",
@@ -169,7 +189,7 @@
     9.0098
    ],
    "elevation_m": 326.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.66
   },
   {
    "name": "r3",
@@ -179,7 +199,7 @@
     9.0111
    ],
    "elevation_m": 320.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.25
   },
   {
    "name": "r4",
@@ -189,7 +209,7 @@
     9.0123
    ],
    "elevation_m": 314.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.83
   },
   {
    "name": "r5",
@@ -199,7 +219,7 @@
     9.0135
    ],
    "elevation_m": 309.0,
-   "pn_bar": 3.0
+   "pn_bar": 6.32
   },
   {
    "name": "r6",
@@ -209,7 +229,7 @@
     9.0122
    ],
    "elevation_m": 306.0,
-   "pn_bar": 3.0
+   "pn_bar": 6.62
   },
   {
    "name": "r7",
@@ -219,7 +239,7 @@
     9.0105
    ],
    "elevation_m": 310.0,
-   "pn_bar": 3.0
+   "pn_bar": 6.23
   },
   {
    "name": "r8",
@@ -229,7 +249,7 @@
     9.0092
    ],
    "elevation_m": 316.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.64
   },
   {
    "name": "r9",
@@ -239,7 +259,7 @@
     9.008
    ],
    "elevation_m": 322.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.05
   },
   {
    "name": "r10",
@@ -249,7 +269,7 @@
     9.0072
    ],
    "elevation_m": 328.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.46
   },
   {
    "name": "b1",
@@ -259,7 +279,7 @@
     9.0122
    ],
    "elevation_m": 317.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.54
   },
   {
    "name": "b2",
@@ -269,7 +289,7 @@
     9.0135
    ],
    "elevation_m": 311.0,
-   "pn_bar": 3.0
+   "pn_bar": 6.13
   },
   {
    "name": "b3",
@@ -279,7 +299,7 @@
     9.014
    ],
    "elevation_m": 303.0,
-   "pn_bar": 3.0
+   "pn_bar": 6.91
   },
   {
    "name": "b4",
@@ -289,7 +309,7 @@
     9.011
    ],
    "elevation_m": 305.0,
-   "pn_bar": 3.0
+   "pn_bar": 6.72
   },
   {
    "name": "b5",
@@ -299,7 +319,7 @@
     9.009
    ],
    "elevation_m": 309.0,
-   "pn_bar": 3.0
+   "pn_bar": 6.32
   },
   {
    "name": "b6",
@@ -309,7 +329,7 @@
     9.007
    ],
    "elevation_m": 313.0,
-   "pn_bar": 3.0
+   "pn_bar": 5.93
   },
   {
    "name": "b7",
@@ -319,7 +339,7 @@
     9.006
    ],
    "elevation_m": 325.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.76
   },
   {
    "name": "b8",
@@ -329,7 +349,7 @@
     9.006
    ],
    "elevation_m": 331.0,
-   "pn_bar": 3.0
+   "pn_bar": 4.17
   }
  ]
 }

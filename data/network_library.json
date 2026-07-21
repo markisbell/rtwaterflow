@@ -13,9 +13,17 @@
    "id": "musterdorf",
    "name": "Musterdorf (zwei Druckzonen)",
    "character": "rural",
-   "nodes": 33,
-   "pipe_km": 3.885,
+   "nodes": 35,
+   "pipe_km": 5.05,
    "dir": "networks/musterdorf"
+  },
+  {
+   "id": "mustertal",
+   "name": "Mustertal (Gegenbehälter)",
+   "character": "rural",
+   "nodes": 8,
+   "pipe_km": 0.856,
+   "dir": "networks/mustertal"
   }
  ]
 }

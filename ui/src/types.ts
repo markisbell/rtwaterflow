@@ -36,7 +36,7 @@ export interface TopoConsumer {
 
 export interface TopoProducer {
   id: number; // platform-unique pid
-  kind: "slack" | "prv";
+  kind: "slack" | "tank" | "prv" | "station";
   name: string;
   node: string;
 }
@@ -44,6 +44,14 @@ export interface TopoProducer {
 /** PRV branch (Druckminderer, zone boundary) — edge for the Drucklinie
  *  path + location for the station marker. */
 export interface TopoPrv {
+  id: number;
+  name: string;
+  from_node: string;
+  to_node: string;
+}
+
+/** Pump-station branch (Pumpwerk) — Drucklinie path edge + ⚙ marker. */
+export interface TopoStation {
   id: number;
   name: string;
   from_node: string;
@@ -58,6 +66,7 @@ export interface Topology {
   consumers: TopoConsumer[];
   producers: TopoProducer[];
   prvs: TopoPrv[];
+  stations: TopoStation[];
   steps_per_day: number;
   n_days: number;
 }
@@ -111,12 +120,14 @@ export interface ConsumerState {
 
 export interface ProducerState {
   id: number;
-  kind: "slack" | "prv";
+  kind: "slack" | "tank" | "prv" | "station";
   name: string;
   node: string;
   p_bar?: number | null;
-  /** SIGNED through-flow for PRVs (negative = reverse flow through the
-   *  valve); source feed magnitude for the slack. */
+  /** SIGNED everywhere since M2: slack positive = supplying the net,
+   *  negative = absorbing (exporting through the boundary); PRV negative =
+   *  reverse valve flow; tank positive = filling; station = pump
+   *  delivery. */
   mdot_kg_per_s?: number | null;
   // PRV (Druckminderer): setpoint (config) vs solved in/out (telemetry)
   p_set_bar?: number | null;
@@ -126,6 +137,60 @@ export interface ProducerState {
    *  back-feeding — physically impossible for a real PRV; M2 supervision
    *  closes the valve then). Honest abnormality flag on the wire. */
   reducing?: boolean;
+  // tank (Hochbehälter): live level
+  level_m?: number | null;
+  // pump station (Pumpwerk): switch state + operator mode
+  running?: boolean;
+  mode?: StationMode;
+  /** The check valve blocked reverse flow this tick (pump commanded on,
+   *  delivering nothing — heads exceed the shutoff lift). */
+  cv_closed?: boolean;
+}
+
+export type StationMode = "auto" | "on" | "off";
+
+/** One entry of the frame's `tanks` list — the full Hochbehälter state
+ *  (station SCADA: levels are always telemetered in a real waterworks). */
+export interface TankState {
+  id: number;
+  name: string;
+  node: string;
+  kind: "durchlauf" | "gegen";
+  level_m: number | null;
+  level_min_m: number | null;
+  level_max_m: number | null;
+  volume_m3: number | null;
+  capacity_m3: number | null;
+  fire_reserve_m3: number | null;
+  p_bar: number | null;
+  /** + = filling (pump surplus), − = supplying the net. */
+  mdot_kg_per_s: number | null;
+  /** Overflow spill while clamped at level_max (EPANET overflow=YES). */
+  mdot_spill_kg_per_s: number | null;
+  /** Hours until the usable volume is gone at the current draw;
+   *  null while filling/balanced. */
+  buffer_time_h: number | null;
+  overflow: boolean;
+  empty: boolean;
+  fire_reserve_breached: boolean;
+}
+
+// ---- GET /stations + POST /station/{name} ---------------------------------------
+
+export interface StationInfo {
+  name: string;
+  from_node: string;
+  to_node: string;
+  control: {
+    mode: "hysteresis" | "manual";
+    tank: string | null;
+    on_below_m: number | null;
+    off_above_m: number | null;
+    running: boolean;
+  };
+  mode: StationMode;
+  running: boolean;
+  curve: [number, number][]; // [[m³/h, bar lift], ...]
 }
 
 export interface StepSummary {
@@ -135,6 +200,13 @@ export interface StepSummary {
   mdot_feed_kg_per_s: number | null;
   mdot_demand_kg_per_s: number | null;
   mdot_delivered_kg_per_s: number | null;
+  /** Level-effective flow INTO the tanks (spill excluded). */
+  mdot_stored_kg_per_s?: number | null;
+  /** Overflow spill at level_max-clamped tanks. */
+  mdot_spill_kg_per_s?: number | null;
+  /** Flow absorbed by fixed-pressure boundaries (multi-source nets);
+   *  feed = delivered + stored + spill + exported. */
+  mdot_exported_kg_per_s?: number | null;
   balance_err_kg_per_s: number | null;
 }
 
@@ -142,6 +214,8 @@ export interface Controls {
   /** The observed layer misses the TRUE min-pressure worst point (no usable
    *  reading, or the critical consumer carries no meter). Null pre-solve. */
   blind_spot?: boolean | null;
+  /** Operator override per pump station (config, scenario-saved). */
+  stations?: Record<string, StationMode>;
 }
 
 /** Water-meter reading at a consumer (mdot + local pressure). In standard
@@ -242,6 +316,8 @@ export interface StepResult {
   consumers?: ConsumerState[];
   summary?: StepSummary;
   producers: ProducerState[];
+  /** Tank states — station SCADA, present in strict mode too. */
+  tanks: TankState[];
   controls: Controls;
   measurements: Measurements;
   observed_summary: ObservedSummary | null;

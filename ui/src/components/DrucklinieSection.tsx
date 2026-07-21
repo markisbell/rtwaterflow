@@ -2,7 +2,8 @@
  * Drucklinie (hydraulic grade line) — the single best water-network teaching
  * visual: along the path from the head source to a chosen consumer, the
  * terrain profile (filled) and the HGL = elevation + pressure head
- * (p_bar × 10.197 m). The vertical gap between the two lines IS the local
+ * (p_bar × ~10.21 m — the backend's pinned water density, see scales
+ * M_PER_BAR). The vertical gap between the two lines IS the local
  * service pressure; at a PRV the HGL drops in a visible step.
  *
  * Pure client-side: shortest path (Dijkstra over pipe lengths; PRV branches
@@ -12,10 +13,8 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { StepResult, Topology } from "../types";
-import { fmt } from "../scales";
+import { M_PER_BAR, fmt } from "../scales";
 import Section from "./Section";
-
-const M_PER_BAR = 10.197; // metres of water column per bar
 
 export interface PathPoint {
   node: string;
@@ -23,9 +22,10 @@ export interface PathPoint {
   elevation_m: number;
 }
 
-/** Dijkstra over the pipe graph (+ PRV edges) from *source* to *target*.
- *  Exported for unit tests (a silent null here kills the flagship
- *  teaching visual with no error). */
+/** Dijkstra over the pipe graph (+ PRV and pump-station edges — both are
+ *  ~zero-length branches the path must be able to cross: since M2 the head
+ *  source can sit BEHIND the Pumpwerk). Exported for unit tests (a silent
+ *  null here kills the flagship teaching visual with no error). */
 export function shortestPath(topo: Topology, source: string,
                              target: string): PathPoint[] | null {
   const adj = new Map<string, { to: string; km: number }[]>();
@@ -40,6 +40,10 @@ export function shortestPath(topo: Topology, source: string,
   for (const v of topo.prvs ?? []) {
     edge(v.from_node, v.to_node, 1e-4);
     edge(v.to_node, v.from_node, 1e-4);
+  }
+  for (const s of topo.stations ?? []) {
+    edge(s.from_node, s.to_node, 1e-4);
+    edge(s.to_node, s.from_node, 1e-4);
   }
   const dist = new Map<string, number>([[source, 0]]);
   const prev = new Map<string, string>();
@@ -85,7 +89,11 @@ export default function DrucklinieSection({ open, onToggle, topo, latest }: {
   latest: StepResult | null;
 }) {
   const { t } = useTranslation();
-  const source = topo.producers.find((p) => p.kind === "slack")?.node;
+  // head source: the slack (since M2 usually the Wasserwerk behind the
+  // pump — the HGL then shows the pump's step UP); tank-only nets start
+  // at the Hochbehälter
+  const source = topo.producers.find((p) => p.kind === "slack")?.node
+    ?? topo.producers.find((p) => p.kind === "tank")?.node;
   const worst = latest?.summary?.worst_node ?? null;
   const [target, setTarget] = useState<string | "worst">("worst");
   const effTarget = target === "worst" ? worst : target;

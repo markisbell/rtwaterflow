@@ -1,0 +1,85 @@
+{
+ "name": "Mustertal (Gegenbehälter)",
+ "junctions": [
+  {
+   "name": "ww2",
+   "kind": "node",
+   "geo": [
+    49.47,
+    9.03
+   ],
+   "elevation_m": 300.0,
+   "pn_bar": 0.3
+  },
+  {
+   "name": "wp",
+   "kind": "node",
+   "geo": [
+    49.4701,
+    9.0302
+   ],
+   "elevation_m": 300.0,
+   "pn_bar": 3.4
+  },
+  {
+   "name": "wt1",
+   "kind": "consumer",
+   "geo": [
+    49.47,
+    9.032
+   ],
+   "elevation_m": 302.0,
+   "pn_bar": 2.94
+  },
+  {
+   "name": "wt2",
+   "kind": "consumer",
+   "geo": [
+    49.4699,
+    9.034
+   ],
+   "elevation_m": 303.0,
+   "pn_bar": 2.84
+  },
+  {
+   "name": "wt3",
+   "kind": "consumer",
+   "geo": [
+    49.4699,
+    9.036
+   ],
+   "elevation_m": 304.0,
+   "pn_bar": 2.74
+  },
+  {
+   "name": "wt4",
+   "kind": "consumer",
+   "geo": [
+    49.4698,
+    9.038
+   ],
+   "elevation_m": 305.0,
+   "pn_bar": 2.64
+  },
+  {
+   "name": "wt5",
+   "kind": "consumer",
+   "geo": [
+    49.4697,
+    9.04
+   ],
+   "elevation_m": 306.0,
+   "pn_bar": 2.55
+  },
+  {
+   "name": "twr",
+   "kind": "source",
+   "geo": [
+    49.4695,
+    9.042
+   ],
+   "elevation_m": 330.0,
+   "pn_bar": 0.2
+  }
+ ]
+}

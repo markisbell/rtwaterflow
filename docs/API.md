@@ -56,8 +56,14 @@ limits · `500` internal failures only —
 | Method | Path | Summary |
 |---|---|---|
 | `GET` | `/producers` | Head-source inventory |
+| `POST` | `/station/{name}` | Override a station |
+| `GET` | `/stations` | Pump stations |
+| `GET` | `/tanks` | Tank states |
 
 - **`GET /producers`** — All head sources with their current configuration (live table values).
+- **`POST /station/{name}`** — Operator override for one pump station: ``auto`` hands control back to the hysteresis rule (manual-control stations return to their CONFIGURED running state); ``on``/``off`` force the state. Applied on the next tick (pre-solve, like every operating rule).
+- **`GET /stations`** — Pump stations: control configuration, operator mode and the live running state.
+- **`GET /tanks`** — Live tank states: level, usable volume, buffer time at the current draw, and the alarm flags (overflow / empty / fire-reserve breached). ``id`` is the platform producer pid (joinable with /producers).
 
 ## consumers
 

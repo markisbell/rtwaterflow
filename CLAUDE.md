@@ -249,8 +249,105 @@ controller" is deferred until a pressure-setpoint actuator exists (DEA,
 M5/M6) — a gravity+PRV net has nothing to actuate; M2 ships tank-level
 hysteresis instead (the canonical German pattern per TF §5).
 
-- Next: **M2 — tanks, pumps, rules** (roadmap §6): WaterTank (ext_grid +
-  level integration, Durchlauf + Gegen variants), pump stations with
-  std_type curves, hysteresis RuleEngine, buffer-time KPI + tank widgets,
-  minimal diurnal demand factor (environment.json) so the sawtooth exists
-  before the M3 demand engine, EPANET/WNTR oracle for the tank trajectory.
+### 2026-07-21 — M2: tanks, pumps, rules (branch `m0-fork-strip`)
+
+**Built** (roadmap §6 M2):
+
+- **Contract**: supply.json gains `tanks` (TankSpec: area, level band, fire
+  reserve, kind durchlauf|gegen) and `stations` (StationSpec: ≥ 3-point
+  Q-H curve, control hysteresis|manual); environment.json gains
+  `demand_factor` (len == steps, > 0 — the interim diurnal profile until
+  M3). Multi-source nets legal since M2 (≥ 1 ext_grid or tank; node
+  collisions, duplicate station names, parallel station branches (#693),
+  pipes bypassing a station (cut-edge, like the M1 PRV rule), consumers on
+  head-source nodes, and non-monotone/unfaithful curve FITS all rejected
+  loudly at load).
+- **WaterTank** (`assets/tank.py`): ext_grid + level-integrating controller
+  (write_p pre-solve = level·BAR_PER_M; explicit-Euler integrate post-solve
+  from res_ext_grid, EPANET EPS semantics; clamps with overflow/empty
+  flags; spill split out as `mdot_spill_kg_per_s`); KPIs usable/capacity,
+  fire_reserve_breached, buffer_time_h (None while filling).
+- **Pump stations — the M2 numerics discovery** (runtime-pinned in
+  `test_pandapipes_pins.py`): pandapipes pump std_types assume zero-lift
+  ZERO-RESISTANCE bypass for reverse flow AND apply the curve lift
+  explicitly per Newton iteration (no dPL/dQ in the Jacobian). Against
+  dominant static head that fixed-point diverges into the reverse-bypass
+  sink: the Hochbehälter drains BACKWARDS through the running pump at
+  −51 kg/s (runtime-verified on Musterdorf). Remedy:
+  `StationLiftStdType` shows the solver a CONSTANT lift;
+  `Simulator._solve_step` finds the honest operating point
+  `lift = curve(Q(lift))` by a bracketed secant on [0, shutoff]
+  (forward-seen tracking, ONE max-effort try per tick, reverse iterates
+  narrow the bracket only; ≤ MAX_STATION_SOLVES=16, exhaustion honestly
+  "degraded"), with EPANET-style check-valve closure (`cv_closed`) when a
+  pump reverses at shutoff head. Curve VALIDATION checks the fitted
+  polynomial, not the points (monotone on [0, 1.2·Qmax], residual bounded)
+  — pandapipes runs on the fit.
+- **RuleEngine** (`control/rules.py`): Zweipunktregelung with rule-OWNED
+  running memory (never read back from in_service — CV closures would
+  latch); operator modes auto|on|off per station (manual stations: auto =
+  configured state, so a closure can never latch), scenario-saved and
+  tolerantly replayed; `reset_operations` restores levels, modes, rule
+  memory AND the cold-start lift seed (deterministic replay).
+- **Wire honesty**: StepResult gains `tanks` (station SCADA — survives
+  strict mode; id = platform pid); station entries running/mode/cv_closed/
+  p_in/p_out/mdot; slack mdot SIGNED (positive = supplying — abs() hid
+  absorbing slacks on multi-source nets); summary splits positive ext_grid
+  flows by element kind: `mdot_stored` (level-effective tank charge),
+  `mdot_spill` (overflow clamp), `mdot_exported` (absorbing boundaries);
+  balance = feed − delivered − stored − spill − exported. producers.csv
+  + new tanks.csv mirror the wire 1:1.
+- **API**: 47 routes (+GET /tanks, +GET /stations incl. hysteresis band +
+  curve, +POST /station/{name} auto|on|off with 404/422); topology gains
+  `stations`; tank-only bundles preview/import cleanly (first-head-source
+  fallback).
+- **Bundles**: Musterdorf grown to 35 nodes (Wasserwerk 336 m → Pumpwerk
+  [[0,10],[15,9.4],[30,8.4],[45,6.8]] → Steigleitung DN150 → Hochbehälter
+  Musterberg 60 m², band 2.4/4.2, 48 m³ Löschreserve → the M1 zones) +
+  24-value diurnal factor; NEW bundle **Mustertal** (8 nodes, GEGEN: pump
+  west, Wasserturm 330 m east, 20 m², band 1.2/3.4 — the reversal segment
+  wt5→twr flips sign over the day). Both deterministic + byte-stable.
+- **UI**: TankSection (SVG level gauge with dead band, Löschreserve band,
+  hysteresis switch marks from GET /stations, live fill; buffer countdown,
+  alarm lines; station rows with running lamp, CV alarm, Auto/Ein/Aus
+  segment — mode reads controls.stations + optimistic overlay, so paused/
+  failed states still confirm operator input); MapDiagram station ⚙️
+  markers (green/grey/red-CV) + tank 🗼 markers (alarm ring) with live
+  popups; Drucklinie crosses station pseudo-edges (tank fallback source);
+  shared density-true constants M_PER_BAR/M3H_PER_KG_S (rho 998.2, not
+  1000); i18n tank.* DE/EN.
+
+**Tests: 140 backend ×2 + 23 vitest**; tsc strict + vite build green;
+API.md regenerated (47 routes).
+
+**Acceptance evidence (roadmap M2):** Musterdorf 24 h: sawtooth 2.39–4.24 m
+in the 2.4/4.2 band, duty 36/96, 3 switches, mass balance exact, every
+frame "ok"; Mustertal: reversal segment +5.7/−3.2 kg/s over one day, band
+1.2/3.4 held; tank mass balance ∫mdot·dt = ΔV·ρ < 0.5 % (both bundles);
+**EPANET/WNTR oracle** (same fitted curve sampled into EPANET, D-W, rule
+controls): level RATES match to ~1 mm/tick in state-matched ticks (pinned
+1 cm median), switching counts ±1, envelopes equal — remaining divergence
+is EPANET's sub-step event timing (documented in test_tank_oracle.py).
+Live E2E verified: tank widget with band marks, mode override round-trip
+(incl. while paused), CV/runaway never on the wire, zero console errors.
+
+**Adversarial review** (3 lenses + per-finding adversarial verification,
+21 agents): 18 confirmed, 0 refuted — all fixed + regression-pinned before
+commit: the shutoff ping-pong (cold starts on marginal pumps exhausted the
+solve cap), unvalidated curve fits, the manual-station auto latch, slack
+abs()/stored dishonesty on multi-source nets, duplicate station names,
+station bypass + parallel-branch + consumer-on-source loader gaps, spill
+booked as stored, tank wire id ≠ pid, tank-only preview 500, stale mode
+display, rho-1000 UI drift, dead /stations surface (now feeds the gauge
+band marks), tanks.csv column gaps, tautological envelope asserts.
+
+**Deviation (documented):** stations must be CUT edges (no parallel pipe
+around a Pumpwerk) until check-valved bypass piping exists (M5 emitters/
+valves); EPANET-style sub-tick rule timing is deliberately NOT emulated
+(15-min SCADA switching is the teaching model).
+
+- Next: **M3 — demand engine** (roadmap §6): archetype profiles
+  (residential city/village, industry shifts, school, farm milking pulses
+  + temperature coupling, pool season/backwash), W 410 fd/fh aggregate
+  validation ±20 %, weather override knob, per-consumer profile plumbing
+  replacing the global demand_factor.

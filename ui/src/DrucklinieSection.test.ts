@@ -28,6 +28,7 @@ const topo: Topology = {
   ],
   producers: [{ id: 0, kind: "slack", name: "Tank", node: "src" }],
   prvs: [{ id: 1, name: "DM", from_node: "a", to_node: "b" }],
+  stations: [],
   steps_per_day: 1440,
   n_days: 1,
 };
@@ -57,5 +58,19 @@ describe("shortestPath (Drucklinie)", () => {
     expect(shortestPath(noPrv, "src", "a")!.map((p) => p.node))
       .toEqual(["src", "a"]);
     expect(shortestPath(noPrv, "src", "leaf")).toBeNull(); // PRV was the link
+  });
+
+  it("crosses pump-station pseudo-edges (M2: the source sits behind the Pumpwerk)", () => {
+    // the island becomes the Wasserwerk, connected only via the pump branch
+    const withPump = {
+      ...topo,
+      stations: [{ id: 9, name: "PW", from_node: "island", to_node: "src" }],
+    };
+    const path = shortestPath(withPump, "island", "leaf");
+    expect(path).not.toBeNull();
+    expect(path!.map((p) => p.node))
+      .toEqual(["island", "src", "a", "b", "leaf"]);
+    // the pump pseudo-edge contributes (almost) nothing
+    expect(path![1].dist_km).toBeLessThan(0.001);
   });
 });

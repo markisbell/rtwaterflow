@@ -1,10 +1,53 @@
 {
  "supplies": [
   {
+   "node": "ww",
+   "name": "Wasserwerk Mustertal (Reinwasser)",
+   "kind": "ext_grid",
+   "p_bar": 0.3
+  }
+ ],
+ "tanks": [
+  {
    "node": "hb",
    "name": "Hochbehälter Musterberg",
-   "kind": "ext_grid",
-   "p_bar": 0.4
+   "kind": "durchlauf",
+   "area_m2": 60.0,
+   "level_min_m": 1.0,
+   "level_max_m": 4.6,
+   "level_initial_m": 3.2,
+   "fire_reserve_m3": 48.0
+  }
+ ],
+ "stations": [
+  {
+   "from_node": "ww",
+   "to_node": "ws",
+   "name": "Pumpwerk Mustertal",
+   "curve": [
+    [
+     0.0,
+     10.0
+    ],
+    [
+     15.0,
+     9.4
+    ],
+    [
+     30.0,
+     8.4
+    ],
+    [
+     45.0,
+     6.8
+    ]
+   ],
+   "control": {
+    "mode": "hysteresis",
+    "tank": "Hochbehälter Musterberg",
+    "on_below_m": 2.4,
+    "off_above_m": 4.2
+   }
   }
  ],
  "prvs": [

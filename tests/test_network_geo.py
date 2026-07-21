@@ -20,6 +20,9 @@ EXPECTED_BBOX = {
     # Musterdorf: the fictional two-zone village, same Odenwald region
     # (302-420 m elevations need real hills under them)
     "musterdorf": (49.44, 49.47, 8.99, 9.02),
+    # Mustertal: the Gegenbehälter valley line, a few km east of Musterdorf
+    # (300-330 m elevations, Wasserturm on the eastern rise)
+    "mustertal": (49.46, 49.48, 9.02, 9.05),
 }
 
 

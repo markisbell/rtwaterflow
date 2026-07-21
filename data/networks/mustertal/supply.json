@@ -1,0 +1,54 @@
+{
+ "supplies": [
+  {
+   "node": "ww2",
+   "name": "Wasserwerk Mustertal II (Reinwasser)",
+   "kind": "ext_grid",
+   "p_bar": 0.3
+  }
+ ],
+ "tanks": [
+  {
+   "node": "twr",
+   "name": "Wasserturm Mustertal",
+   "kind": "gegen",
+   "area_m2": 20.0,
+   "level_min_m": 0.5,
+   "level_max_m": 4.0,
+   "level_initial_m": 2.0,
+   "fire_reserve_m3": 20.0
+  }
+ ],
+ "stations": [
+  {
+   "from_node": "ww2",
+   "to_node": "wp",
+   "name": "Pumpwerk Mustertal II",
+   "curve": [
+    [
+     0.0,
+     4.5
+    ],
+    [
+     10.0,
+     4.1
+    ],
+    [
+     20.0,
+     3.4
+    ],
+    [
+     30.0,
+     2.4
+    ]
+   ],
+   "control": {
+    "mode": "hysteresis",
+    "tank": "Wasserturm Mustertal",
+    "on_below_m": 1.2,
+    "off_above_m": 3.4
+   }
+  }
+ ],
+ "prvs": []
+}

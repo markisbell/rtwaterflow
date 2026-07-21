@@ -184,6 +184,8 @@ const de = {
     consumer: "Abnehmer {{name}}",
     plant: "🏔️ {{name}}",
     prv: "Druckminderer {{name}}",
+    station: "Pumpwerk {{name}}",
+    tank: "Behälter {{name}}",
     node: "Netzknoten {{name}} ({{elev}} m ü. NN) — Rechtsklick: Messstellen",
   },
 
@@ -218,6 +220,41 @@ const de = {
       "Der Abstand zwischen Drucklinie und Gelände IST der örtliche " +
       "Versorgungsdruck (10 m ≈ 1 bar). Am Druckminderer springt die " +
       "Linie sichtbar nach unten.",
+  },
+
+  tank: {
+    heading: "Behälter & Pumpwerke",
+    durchlauf: "Durchlaufbehälter",
+    gegen: "Gegenbehälter",
+    level: "Füllstand",
+    volume: "Nutzinhalt",
+    inflow: "füllt sich",
+    outflow: "entleert sich",
+    balanced: "ausgeglichen",
+    buffer: "Reichweite",
+    bufferTitle:
+      "Stunden bis der Nutzinhalt beim aktuellen Bezug aufgebraucht ist",
+    overflow: "Überlauf! Behälter voll — Zulauf läuft über",
+    empty: "Behälter leer — Mindeststand erreicht",
+    fireReserve:
+      "Löschwasserreserve angebrochen ({{m3}} m³ vorgeschrieben)",
+    fireBand: "Löschreserve",
+    running: "läuft",
+    stopped: "steht",
+    cvClosed:
+      "Rückschlagklappe zu — Gegendruck über Förderhöhe, Pumpe fördert nicht",
+    modeAuto: "Auto",
+    modeOn: "Ein",
+    modeOff: "Aus",
+    modeAutoTitle: "Zweipunktregelung nach Behälterstand (Regel entscheidet)",
+    modeOnTitle: "Hand: Pumpe dauerhaft ein (an der Regel vorbei)",
+    modeOffTitle: "Hand: Pumpe dauerhaft aus (an der Regel vorbei)",
+    band: "Schaltband {{on}}–{{off}} m",
+    noTanks: "keine Behälter in diesem Netz",
+    hint:
+      "Pumpen starten unter dem Einschalt- und stoppen über dem " +
+      "Ausschaltstand (Zweipunktregelung, DVGW W 300-1). Die " +
+      "Löschreserve liegt direkt über dem Mindeststand.",
   },
 
   live: {
@@ -449,6 +486,8 @@ const en: typeof de = {
     consumer: "Consumer {{name}}",
     plant: "🏔️ {{name}}",
     prv: "Pressure-reducing valve {{name}}",
+    station: "Pump station {{name}}",
+    tank: "Tank {{name}}",
     node: "Network node {{name}} ({{elev}} m a.s.l.) — right-click: sensors",
   },
 
@@ -483,6 +522,41 @@ const en: typeof de = {
       "The gap between the grade line and the terrain IS the local " +
       "service pressure (10 m ≈ 1 bar). At the PRV the line visibly " +
       "steps down.",
+  },
+
+  tank: {
+    heading: "Tanks & pump stations",
+    durchlauf: "Flow-through tank",
+    gegen: "Counter tank",
+    level: "Level",
+    volume: "Usable volume",
+    inflow: "filling",
+    outflow: "draining",
+    balanced: "balanced",
+    buffer: "Buffer time",
+    bufferTitle:
+      "Hours until the usable volume is gone at the current draw",
+    overflow: "Overflow! Tank full — inflow spilling",
+    empty: "Tank empty — minimum level reached",
+    fireReserve:
+      "Fire-fighting reserve breached ({{m3}} m³ required)",
+    fireBand: "Fire reserve",
+    running: "running",
+    stopped: "stopped",
+    cvClosed:
+      "Check valve shut — head above shutoff lift, pump delivers nothing",
+    modeAuto: "Auto",
+    modeOn: "On",
+    modeOff: "Off",
+    modeAutoTitle: "Two-point tank-level control (the rule decides)",
+    modeOnTitle: "Manual: pump forced on (past the rule)",
+    modeOffTitle: "Manual: pump forced off (past the rule)",
+    band: "Switching band {{on}}–{{off}} m",
+    noTanks: "no tanks in this network",
+    hint:
+      "Pumps start below the on-level and stop above the off-level " +
+      "(two-point control, DVGW W 300-1). The fire reserve sits right " +
+      "above the minimum level.",
   },
 
   live: {

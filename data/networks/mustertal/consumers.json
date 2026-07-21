@@ -1,0 +1,39 @@
+{
+ "consumers": [
+  {
+   "node": "wt1",
+   "name": "Talweg 1-15",
+   "mdot_kg_per_s": 0.35,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "wt2",
+   "name": "Talweg 17-35 (MFH)",
+   "mdot_kg_per_s": 0.45,
+   "kind": "residential",
+   "storeys": 3
+  },
+  {
+   "node": "wt3",
+   "name": "Talweg 37-49",
+   "mdot_kg_per_s": 0.3,
+   "kind": "residential",
+   "storeys": 2
+  },
+  {
+   "node": "wt4",
+   "name": "Gewerbehof Mustertal",
+   "mdot_kg_per_s": 0.5,
+   "kind": "industry",
+   "storeys": 1
+  },
+  {
+   "node": "wt5",
+   "name": "Talweg 51-63",
+   "mdot_kg_per_s": 0.4,
+   "kind": "residential",
+   "storeys": 2
+  }
+ ]
+}

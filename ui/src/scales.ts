@@ -22,6 +22,14 @@ export const V_WARN = 2.0;
 /** Velocity scale end [m/s] — full red (2.5 short peaks, beyond = red). */
 export const V_MAX = 3.5;
 
+/** Metres of water column per bar — derived from the SAME density/gravity
+ *  the backend pins (BAR_PER_M = 998.2·9.81/1e5): one constant, both ends.
+ *  (rho=1000 shortcuts drifted the HGL ~0.15 % off the solver's own head
+ *  bookkeeping — M2 review finding.) */
+export const M_PER_BAR = 1e5 / (998.2 * 9.81);
+/** kg/s → m³/h at the backend's pinned water density (NOT ×3.6). */
+export const M3H_PER_KG_S = 3600 / 998.2;
+
 type Stop = [number, [number, number, number]];
 
 function ramp(stops: Stop[], t: number): string {

@@ -153,6 +153,12 @@ def build_topology(network_id: str, sim: Simulator) -> dict:
          "from_node": m["from_node"], "to_node": m["node"]}
         for m in idx.producer_meta if m["kind"] == "prv"
     ]
+    # pump-station branches (Drucklinie path edges + ⚙️ markers)
+    stations = [
+        {"id": int(m["pid"]), "name": m["name"],
+         "from_node": m["from_node"], "to_node": m["node"]}
+        for m in idx.producer_meta if m["kind"] == "station"
+    ]
     consumers = [
         {"id": int(idx.consumers[i]), "name": idx.consumer_names[i],
          "node": idx.consumer_nodes[i],
@@ -174,6 +180,7 @@ def build_topology(network_id: str, sim: Simulator) -> dict:
         "consumers": consumers,
         "producers": producers,
         "prvs": prvs,
+        "stations": stations,
         "steps_per_day": sim.profiles.steps_per_day,
         "n_days": sim.profiles.n_days,
     }

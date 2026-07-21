@@ -3,10 +3,10 @@
 Per-document schema validation lives in :mod:`rtwaterflow.models`; this module
 adds the **cross-document** checks:
 
-* node references valid (pipes, consumers, supplies),
-* exactly one slack (already enforced per-file, re-checked here),
-* every consumer and supply node reachable from the slack node over the
-  pipe graph,
+* node references valid (pipes, consumers, supplies, prvs, tanks, stations),
+* at least one head source (already enforced per-file, re-checked here),
+* every consumer and head source reachable over the pipe graph (PRV and
+  pump-station branches count as edges),
 * no isolated nodes (degree 0 — a junction without any pipe cannot solve),
 * the environment horizon covers a whole number of days.
 
@@ -97,9 +97,19 @@ def cross_validate(inputs: NetInputs) -> None:
         for ref in (p.from_node, p.to_node):
             if ref not in nodes:
                 errors.append(f"pipe {p.from_node}->{p.to_node}: unknown node {ref!r}")
+    head_source_nodes = ({s.node for s in inputs.supply.supplies}
+                         | {t.node for t in inputs.supply.tanks})
     for c in inputs.consumers.consumers:
         if c.node not in nodes:
             errors.append(f"consumer {c.name or c.node!r}: unknown node {c.node!r}")
+        elif c.node in head_source_nodes:
+            # a sink ON the fixed-pressure junction is served straight from
+            # the boundary and pins the Schlechtpunkt KPI to the source's
+            # low gauge pressure forever (M2 review finding)
+            errors.append(
+                f"consumer {c.name or c.node!r} sits on head-source node "
+                f"{c.node!r} — demands must attach to network nodes, not "
+                "to the fixed-pressure boundary itself")
     for s in inputs.supply.supplies:
         if s.node not in nodes:
             errors.append(f"supply {s.name or s.kind}: unknown node {s.node!r}")
@@ -107,6 +117,20 @@ def cross_validate(inputs: NetInputs) -> None:
         for ref in (v.from_node, v.to_node):
             if ref not in nodes:
                 errors.append(f"prv {v.from_node}->{v.to_node}: unknown node {ref!r}")
+    tank_names = set()
+    for tk in inputs.supply.tanks:
+        if tk.node not in nodes:
+            errors.append(f"tank {tk.name or tk.node!r}: unknown node {tk.node!r}")
+        tank_names.add(tk.name or f"tank_{tk.node}")
+    for st in inputs.supply.stations:
+        for ref in (st.from_node, st.to_node):
+            if ref not in nodes:
+                errors.append(
+                    f"station {st.from_node}->{st.to_node}: unknown node {ref!r}")
+        if st.control.mode == "hysteresis" and st.control.tank not in tank_names:
+            errors.append(
+                f"station {st.name or st.from_node}: hysteresis control "
+                f"references unknown tank {st.control.tank!r}")
 
     # --- geometry anchoring: the polyline is physics input (derived length,
     # arrow orientation) — its ends must sit on the from/to nodes ---
@@ -130,13 +154,14 @@ def cross_validate(inputs: NetInputs) -> None:
     if total_min % (24 * 60) != 0:
         errors.append(f"environment horizon {total_min} min is not a whole number of days")
 
-    # --- exactly one slack (belt and braces; SupplyFile enforces too) ---
+    # --- at least one head source (belt and braces; SupplyFile enforces) ---
     slacks = [s for s in inputs.supply.supplies if s.kind == "ext_grid"]
-    if len(slacks) != 1:
-        errors.append(f"exactly one slack (ext_grid) required, got {len(slacks)}")
+    if not slacks and not inputs.supply.tanks:
+        errors.append("at least one head source (ext_grid or tank) required")
 
-    # --- reachability over the pipe graph (PRVs are branch elements and
-    # count as edges — a zone fed only through a PRV is reachable) ---
+    # --- reachability over the pipe graph (PRVs and pump stations are
+    # branch elements and count as edges — a zone fed only through them is
+    # reachable) ---
     adjacency: dict[str, set[str]] = defaultdict(set)
     degree: dict[str, int] = defaultdict(int)
     for p in inputs.pipes.pipes:
@@ -149,18 +174,27 @@ def cross_validate(inputs: NetInputs) -> None:
         adjacency[v.to_node].add(v.from_node)
         degree[v.from_node] += 1
         degree[v.to_node] += 1
+    for st in inputs.supply.stations:
+        adjacency[st.from_node].add(st.to_node)
+        adjacency[st.to_node].add(st.from_node)
+        degree[st.from_node] += 1
+        degree[st.to_node] += 1
 
-    if slacks:
-        reachable = _bfs(adjacency, slacks[0].node)
+    head_nodes = ([s.node for s in slacks]
+                  + [t.node for t in inputs.supply.tanks])
+    if head_nodes:
+        reachable = _bfs(adjacency, head_nodes[0])
         for c in inputs.consumers.consumers:
             if c.node not in reachable:
                 errors.append(
                     f"consumer {c.name or c.node!r} at {c.node!r} not reachable "
-                    f"from the slack at {slacks[0].node!r}"
+                    f"from the head source at {head_nodes[0]!r}"
                 )
-        for s in inputs.supply.supplies:
-            if s.node not in reachable:
-                errors.append(f"supply at {s.node!r} not reachable from the slack")
+        for node in head_nodes:
+            if node not in reachable:
+                errors.append(
+                    f"head source at {node!r} not reachable from the "
+                    f"head source at {head_nodes[0]!r} (split network?)")
 
     # Isolated nodes (no pipe at all) cannot participate in the solve.
     # Dead ends WITHOUT a consumer are fine in hydraulics mode (stagnant
@@ -172,19 +206,47 @@ def cross_validate(inputs: NetInputs) -> None:
     # A PRV must be a CUT edge: a pipe path bypassing it would let the
     # low zone see two contradictory heads (press_control has no state
     # machine — the solve produces fictional fields with reverse valve
-    # flow instead of failing).
-    if slacks and inputs.supply.prvs:
-        pipes_only: dict[str, set[str]] = defaultdict(set)
+    # flow instead of failing). Pump-station branches count like pipes here.
+    if head_nodes and inputs.supply.prvs:
+        no_prv: dict[str, set[str]] = defaultdict(set)
         for p in inputs.pipes.pipes:
-            pipes_only[p.from_node].add(p.to_node)
-            pipes_only[p.to_node].add(p.from_node)
-        reachable_wo_prv = _bfs(pipes_only, slacks[0].node)
+            no_prv[p.from_node].add(p.to_node)
+            no_prv[p.to_node].add(p.from_node)
+        for st in inputs.supply.stations:
+            no_prv[st.from_node].add(st.to_node)
+            no_prv[st.to_node].add(st.from_node)
+        reachable_wo_prv = _bfs(no_prv, head_nodes[0])
         for v in inputs.supply.prvs:
             if v.to_node in reachable_wo_prv:
                 errors.append(
                     f"prv {v.from_node}->{v.to_node}: a pipe path bypasses "
                     "the valve — the zone boundary must be a cut (no "
                     "parallel pipes around a Druckminderer)")
+
+    # A pump station must be a CUT edge too: a pipe path around the pump
+    # short-circuits the constant-lift branch into a recirculation loop the
+    # operating-point iteration settles on far beyond the curve's domain —
+    # fictional flows in "ok" frames (M2 review finding; same failure class
+    # as the PRV bypass). Real pump bypasses have check valves and are not
+    # modeled before M5.
+    for st in inputs.supply.stations:
+        others: dict[str, set[str]] = defaultdict(set)
+        for p in inputs.pipes.pipes:
+            others[p.from_node].add(p.to_node)
+            others[p.to_node].add(p.from_node)
+        for v in inputs.supply.prvs:
+            others[v.from_node].add(v.to_node)
+            others[v.to_node].add(v.from_node)
+        for st2 in inputs.supply.stations:
+            if st2 is st:
+                continue
+            others[st2.from_node].add(st2.to_node)
+            others[st2.to_node].add(st2.from_node)
+        if st.to_node in _bfs(others, st.from_node):
+            errors.append(
+                f"station {st.name or st.from_node}: a pipe path bypasses "
+                "the pump — the station edge must be a cut (no parallel "
+                "pipes around a Pumpwerk)")
 
     if errors:
         raise DataContractError(errors)

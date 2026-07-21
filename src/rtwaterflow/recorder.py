@@ -65,7 +65,13 @@ _ELEMENT_FILES = (
       "p_bar")),
     ("producers", "producers.csv",
      ("id", "kind", "name", "node", "p_bar", "mdot_kg_per_s",
-      "p_set_bar", "p_out_bar", "p_in_bar", "reducing")),
+      "p_set_bar", "p_out_bar", "p_in_bar", "reducing", "level_m",
+      "running", "mode", "cv_closed")),
+    ("tanks", "tanks.csv",
+     ("id", "name", "node", "kind", "level_m", "level_min_m", "level_max_m",
+      "volume_m3", "capacity_m3", "fire_reserve_m3", "p_bar",
+      "mdot_kg_per_s", "mdot_spill_kg_per_s", "buffer_time_h",
+      "overflow", "empty", "fire_reserve_breached")),
 )
 # the Gemessen layer (measurements.consumers / measurements.nodes lists)
 _MEAS_FILES = (

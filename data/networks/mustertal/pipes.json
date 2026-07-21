@@ -1,0 +1,106 @@
+{
+ "pipes": [
+  {
+   "from_node": "wp",
+   "to_node": "wt1",
+   "dn": 125,
+   "material": "GGG",
+   "year_laid": 1990,
+   "geometry": [
+    [
+     49.4701,
+     9.0302
+    ],
+    [
+     49.47,
+     9.032
+    ]
+   ]
+  },
+  {
+   "from_node": "wt1",
+   "to_node": "wt2",
+   "dn": 160,
+   "material": "PE",
+   "year_laid": 2012,
+   "geometry": [
+    [
+     49.47,
+     9.032
+    ],
+    [
+     49.4699,
+     9.034
+    ]
+   ]
+  },
+  {
+   "from_node": "wt2",
+   "to_node": "wt3",
+   "dn": 160,
+   "material": "PE",
+   "year_laid": 2012,
+   "geometry": [
+    [
+     49.4699,
+     9.034
+    ],
+    [
+     49.4699,
+     9.036
+    ]
+   ]
+  },
+  {
+   "from_node": "wt3",
+   "to_node": "wt4",
+   "dn": 160,
+   "material": "PE",
+   "year_laid": 2012,
+   "geometry": [
+    [
+     49.4699,
+     9.036
+    ],
+    [
+     49.4698,
+     9.038
+    ]
+   ]
+  },
+  {
+   "from_node": "wt4",
+   "to_node": "wt5",
+   "dn": 160,
+   "material": "PE",
+   "year_laid": 2012,
+   "geometry": [
+    [
+     49.4698,
+     9.038
+    ],
+    [
+     49.4697,
+     9.04
+    ]
+   ]
+  },
+  {
+   "from_node": "wt5",
+   "to_node": "twr",
+   "dn": 100,
+   "material": "GGG",
+   "year_laid": 1990,
+   "geometry": [
+    [
+     49.4697,
+     9.04
+    ],
+    [
+     49.4695,
+     9.042
+    ]
+   ]
+  }
+ ]
+}

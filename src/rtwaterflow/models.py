@@ -197,19 +197,159 @@ class PrvSpec(_StrictModel):
         return self
 
 
-class SupplyFile(_StrictModel):
-    supplies: list[SupplySpec] = Field(min_length=1)
-    prvs: list[PrvSpec] = Field(default_factory=list)
+class TankSpec(_StrictModel):
+    """An elevated tank (Hochbehälter / Wasserturm): the floating head of
+    its zone. Modeled as an ext_grid at *node* whose pressure the
+    :class:`~rtwaterflow.assets.tank.WaterTank` controller re-writes each
+    tick from the integrated water level (level → head, 1 bar ≈ 10.2 m).
+    The tank BOTTOM sits at the node's ``elevation_m``; ``level_*`` are
+    water columns above it."""
+
+    node: str
+    name: Optional[str] = None
+    area_m2: float = Field(gt=0)
+    level_min_m: float = Field(ge=0)
+    level_max_m: float = Field(gt=0)
+    level_initial_m: float = Field(gt=0)
+    #: dedicated Löschwasserreserve [m³] held ABOVE level_min (W 405/W 300-1)
+    fire_reserve_m3: float = Field(default=0.0, ge=0)
+    kind: Literal["durchlauf", "gegen"] = "durchlauf"
 
     @model_validator(mode="after")
-    def _exactly_one_ext_grid(self) -> "SupplyFile":
-        n = sum(1 for s in self.supplies if s.kind == "ext_grid")
-        if n != 1:
+    def _levels(self) -> "TankSpec":
+        if not (self.level_min_m < self.level_max_m):
+            raise ValueError(f"tank at {self.node!r}: level_min < level_max required")
+        if not (self.level_min_m <= self.level_initial_m <= self.level_max_m):
             raise ValueError(
-                f"exactly one slack (ext_grid head source) required, got {n} "
-                "(every hydraulically connected net needs exactly one fixed-pressure "
-                "node in M0/M1; tanks/stations with controllers arrive in M2)"
-            )
+                f"tank at {self.node!r}: level_initial outside [min, max]")
+        if self.fire_reserve_m3 > (self.level_max_m - self.level_min_m) * self.area_m2:
+            raise ValueError(
+                f"tank at {self.node!r}: fire reserve exceeds the usable volume")
+        return self
+
+
+class StationControl(_StrictModel):
+    """Pump-station control. ``hysteresis`` is the canonical German pattern
+    (TF §5): start below ``on_below_m`` tank level, stop above
+    ``off_above_m``. ``manual`` runs fixed until the operator toggles it."""
+
+    mode: Literal["hysteresis", "manual"] = "hysteresis"
+    tank: Optional[str] = None          # tank NAME (hysteresis mode)
+    on_below_m: Optional[float] = Field(default=None, gt=0)
+    off_above_m: Optional[float] = Field(default=None, gt=0)
+    running: bool = True                # manual mode initial state
+
+    @model_validator(mode="after")
+    def _mode_fields(self) -> "StationControl":
+        if self.mode == "hysteresis":
+            if not self.tank or self.on_below_m is None or self.off_above_m is None:
+                raise ValueError(
+                    "hysteresis control needs tank + on_below_m + off_above_m")
+            if not (self.on_below_m < self.off_above_m):
+                raise ValueError("hysteresis band: on_below_m < off_above_m")
+        return self
+
+
+class StationSpec(_StrictModel):
+    """A pump station: pandapipes ``pump`` branch with a Q-H characteristic
+    (regression std_type from the given curve points)."""
+
+    from_node: str
+    to_node: str
+    name: Optional[str] = None
+    #: characteristic curve [[flow m³/h, pressure lift bar], ...] — at least
+    #: 3 points, strictly decreasing lift over increasing flow
+    curve: list[tuple[float, float]] = Field(min_length=3)
+    control: StationControl = Field(default_factory=StationControl)
+
+    @model_validator(mode="after")
+    def _curve_shape(self) -> "StationSpec":
+        if self.from_node == self.to_node:
+            raise ValueError(
+                f"station {self.from_node}->{self.to_node}: self-loop")
+        flows = [p[0] for p in self.curve]
+        lifts = [p[1] for p in self.curve]
+        if flows != sorted(flows) or len(set(flows)) != len(flows):
+            raise ValueError("station curve: flows must strictly increase")
+        if lifts != sorted(lifts, reverse=True):
+            raise ValueError("station curve: lift must decrease with flow")
+        return self
+
+    @model_validator(mode="after")
+    def _curve_fit(self) -> "StationSpec":
+        """Validate the degree-2 REGRESSION the engine actually runs on
+        (pandapipes fits the same np.polyfit polynomial): decreasing input
+        points can still fit to a convex parabola whose minimum lies inside
+        the Q-range — the operating-point iteration's g-strictly-decreasing
+        invariant would silently break and every running tick degrade (M2
+        review finding). Reject loudly at load time instead."""
+        import numpy as np
+
+        x = np.asarray([p[0] for p in self.curve], dtype=float)
+        y = np.asarray([p[1] for p in self.curve], dtype=float)
+        reg = np.polyfit(x, y, 2)
+        q_hi = 1.2 * float(x[-1])
+        qs = np.linspace(0.0, q_hi, 25)
+        slope = np.polyval(np.polyder(reg), qs)
+        if np.any(slope >= 0):
+            raise ValueError(
+                "station curve: the degree-2 regression fitted to these "
+                "points is not strictly decreasing over "
+                f"[0, {q_hi:.0f} m³/h] — pandapipes runs on the FIT, not "
+                "the points; supply points closer to a downward parabola")
+        resid = float(np.max(np.abs(np.polyval(reg, x) - y)))
+        if resid > max(0.3, 0.05 * float(y[0])):
+            raise ValueError(
+                "station curve: the degree-2 regression deviates from the "
+                f"declared points by up to {resid:.2f} bar — the engine "
+                "would run a materially different characteristic; supply "
+                "points a parabola can follow")
+        return self
+
+
+class SupplyFile(_StrictModel):
+    supplies: list[SupplySpec] = Field(default_factory=list)
+    prvs: list[PrvSpec] = Field(default_factory=list)
+    tanks: list[TankSpec] = Field(default_factory=list)
+    stations: list[StationSpec] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _head_sources(self) -> "SupplyFile":
+        n_heads = (sum(1 for s in self.supplies if s.kind == "ext_grid")
+                   + len(self.tanks))
+        if n_heads < 1:
+            raise ValueError(
+                "at least one head source (ext_grid or tank) required — "
+                "pipeflow needs a pressure-fixed node")
+        nodes = ([s.node for s in self.supplies]
+                 + [t.node for t in self.tanks])
+        dupes = {n for n in nodes if nodes.count(n) > 1}
+        if dupes:
+            raise ValueError(
+                f"head sources collide on node(s) {sorted(dupes)} — one "
+                "fixed-pressure element per junction")
+        names = [t.name or f"tank_{t.node}" for t in self.tanks]
+        if len(set(names)) != len(names):
+            raise ValueError("tank names must be unique")
+        # station names are load-bearing keys (pump std_type registry,
+        # station_modes, rule bindings, the _solve_step bracket state) —
+        # a duplicate silently overwrites the first station's curve and
+        # collapses its control (M2 review finding)
+        snames = [s.name or f"station_{s.from_node}" for s in self.stations]
+        if len(set(snames)) != len(snames):
+            raise ValueError(
+                "station names must be unique (unnamed stations resolve to "
+                "station_<from_node> — two unnamed stations may not share "
+                "a from_node)")
+        # two pump branches on one node pair leave the flow split
+        # indeterminate — every solve fails with a singular Jacobian
+        # (upstream pandapipes issue #693; M2 review finding)
+        edges = [frozenset((s.from_node, s.to_node)) for s in self.stations]
+        if len(set(edges)) != len(edges):
+            raise ValueError(
+                "two stations on the same node pair (parallel pump "
+                "branches) — pandapipes cannot solve this (issue #693); "
+                "model parallel pumps as ONE station with a combined curve")
         return self
 
 
@@ -218,12 +358,18 @@ class SupplyFile(_StrictModel):
 # ---------------------------------------------------------------------------
 
 class EnvironmentFile(_StrictModel):
-    """Horizon owner + environment drivers (air temperature is unused in M0;
-    the M3 demand engine couples it to irrigation/pool/livestock demand)."""
+    """Horizon owner + environment drivers (air temperature is unused until
+    the M3 demand engine couples it to irrigation/pool/livestock demand).
+
+    ``demand_factor`` is the M2 interim diurnal modulation: a global
+    multiplicative factor per step applied to every consumer's base demand
+    (night valley, morning/evening peaks) so tank sawtooth dynamics exist
+    before the M3 archetype profiles replace it."""
 
     resolution_minutes: int = Field(gt=0)
     steps: int = Field(gt=0)
     t_air_c: list[float]
+    demand_factor: Optional[list[float]] = None
 
     @model_validator(mode="after")
     def _lengths(self) -> "EnvironmentFile":
@@ -231,4 +377,11 @@ class EnvironmentFile(_StrictModel):
             raise ValueError(
                 f"environment.t_air_c: length {len(self.t_air_c)} != steps {self.steps}"
             )
+        if self.demand_factor is not None:
+            if len(self.demand_factor) != self.steps:
+                raise ValueError(
+                    f"environment.demand_factor: length "
+                    f"{len(self.demand_factor)} != steps {self.steps}")
+            if any(f <= 0 for f in self.demand_factor):
+                raise ValueError("environment.demand_factor: factors must be > 0")
         return self

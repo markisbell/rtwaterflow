@@ -88,6 +88,27 @@ def test_press_control_holds_outlet_pressure():
     assert r.deltap_bar < 0                            # a genuine reduction
 
 
+def test_pump_std_type_bypasses_reverse_flow():
+    """Pump pin (runtime-verified 2026-07-20): upstream PumpStdType assumes
+    BYPASS for reverse flow — get_pressure(Q<0) == 0, i.e. zero lift AND
+    zero resistance — and clamps the forward polynomial at >= 0. The whole
+    M2 station strategy (StationLiftStdType constant lift + the outer
+    operating-point iteration + the check-valve closure in _solve_step)
+    exists because of these two behaviors: with them, Newton reliably
+    converged onto a −51 kg/s backwards Hochbehälter drain through a
+    running 45 m³/h pump. If this pin fires, upstream changed the pump
+    model — revisit simulator._solve_step before trusting the new one."""
+    from pandapipes.std_types.std_type_class import PumpStdType
+
+    std = PumpStdType.from_list(
+        "pin", [0.0, 15.0, 30.0, 45.0], [10.0, 9.4, 8.4, 6.8], 2)
+    assert std.get_pressure(-1e-3) == 0                 # reverse: bypass
+    assert std.get_pressure(1.0) == 0                   # beyond curve: clamp
+    assert std.get_pressure(0.0) == pytest.approx(10.0, abs=0.1)
+    # input is m³/s, polynomial in m³/h (the ×3600 inside get_pressure)
+    assert std.get_pressure(30.0 / 3600.0) == pytest.approx(8.4, abs=0.1)
+
+
 def test_builder_single_layer_no_thermal_columns(hillside_inputs):
     """The water builder creates ONE junction per node with height_m set and
     passes no thermal pipe parameters (text_k stays at the signature default

@@ -22,10 +22,12 @@ import pandapipes as pp
 from pandapipes import pipeflow
 from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
 
+from .assets.tank import WaterTank
 from .config import Settings, get_settings
+from .control.rules import HysteresisRule, RuleEngine
 from .estimator import EstimationConfig, ForwardObserver
 from .net_inputs import NetInputs
-from .network_builder import ProfileArrays, build_network
+from .network_builder import RHO_KG_M3, ProfileArrays, build_network
 from .sensors import WINDOW_MINUTES, MeasurementSet, _r
 
 log = logging.getLogger(__name__)
@@ -52,6 +54,7 @@ class StepResult:
     summary: dict = field(default_factory=dict)
     # -- supply/equipment (always visible) --
     producers: list = field(default_factory=list)
+    tanks: list = field(default_factory=list)
     controls: dict = field(default_factory=dict)
     # -- observability layers --
     measurements: dict = field(default_factory=dict)
@@ -77,6 +80,25 @@ def retry_attempts(iter_base: int) -> list[dict]:
         dict(mode="hydraulics", iter=3 * n, friction_model="colebrook"),
         dict(mode="hydraulics", iter=3 * n, friction_model="nikuradse"),
     ]
+
+
+#: reverse-flow threshold below which a running pump's check valve closes
+#: (numerical near-zero flows must not trip the valve)
+CV_EPS_KG_PER_S = 1e-4
+
+#: station operating-point tolerance |curve(Q) − lift| and the cap on
+#: pipeflow calls per tick spent settling it. Worst case is a cold start on
+#: a marginally sized pump (root within CV_CLOSE_MARGIN of shutoff): one
+#: max-effort solve + one bisection per solve until two forward points feed
+#: the secant. The cap is a never-500 backstop, not a normal path — an
+#: exhausted tick is honestly reported "degraded" and the warm start
+#: recovers next tick.
+LIFT_TOL_BAR = 0.02
+MAX_STATION_SOLVES = 16
+
+#: a pump still reversing this close to shutoff head has no forward
+#: operating point — its check valve closes for the tick
+CV_CLOSE_MARGIN_BAR = 0.05
 
 
 @dataclass
@@ -120,12 +142,16 @@ def solve_with_retry(net, iter_base: int = 100) -> SolveOutcome:
 # forward observer's twin (estimator.py): one set of formulas, never two.
 # ---------------------------------------------------------------------------
 
-def collect_physics(net, idx) -> dict:
+def collect_physics(net, idx, tanks=None) -> dict:
     """The four ground-truth wire keys + aux values from a SOLVED *net*.
 
     Returns ``{junctions, pipes, consumers, summary, aux}`` where ``aux``
     carries ``worst_pos`` (consumer row of the min-pressure worst point) for
     the caller's blind-spot flag and the key_points measurement preset.
+
+    *tanks* (the Simulator's WaterTank list) supplies the overflow-spill
+    split of the stored flow; the estimator twin passes None (no tank
+    objects — its stored figure then includes any spill).
     """
     rj, rp = net.res_junction, net.res_pipe
     rs = net.res_sink
@@ -176,9 +202,33 @@ def collect_physics(net, idx) -> dict:
     else:
         worst_pos, p_min_bar, worst_consumer, worst_node = 0, None, None, None
 
-    # feed: pandapipes reports ext_grid withdrawal as negative mdot — the
-    # magnitude is what the wire carries (pinned by the hillside regression)
-    mdot_feed = float(abs(net.res_ext_grid.mdot_kg_per_s.loc[idx.ext_grid]))
+    # feed over ALL head sources: pandapipes reports ext_grid withdrawal as
+    # negative mdot (pinned) — negatives supply the net. Positives are split
+    # BY ELEMENT KIND (M2 review finding — booking an absorbing plain slack
+    # as "stored" fabricated tank storage on multi-slack nets):
+    #   tank elements  -> stored (level-effective) + spill (overflow clamp:
+    #                     the level integrator could not keep it, the tank
+    #                     spills it — EPANET overflow semantics; *tanks*
+    #                     supplies the clamp remainder, None for the
+    #                     estimator twin which has no tank objects),
+    #   slack elements -> exported (water leaving through a fixed-pressure
+    #                     boundary, e.g. the downhill reservoir of a
+    #                     two-source net).
+    eg_ids = idx.ext_grids if len(idx.ext_grids) else np.asarray(
+        [idx.ext_grid], dtype=np.int64)
+    eg_mdot = net.res_ext_grid.mdot_kg_per_s.loc[eg_ids].to_numpy(dtype=float)
+    mdot_feed = float(-eg_mdot[eg_mdot < 0].sum())
+    tank_elements = {int(m["element"]) for m in idx.producer_meta
+                    if m["kind"] == "tank"}
+    pos_tank = float(sum(
+        m for el, m in zip(eg_ids, eg_mdot)
+        if m > 0 and int(el) in tank_elements))
+    mdot_exported = float(sum(
+        m for el, m in zip(eg_ids, eg_mdot)
+        if m > 0 and int(el) not in tank_elements))
+    mdot_spill = float(sum(
+        getattr(t, "mdot_spill_kg_per_s", 0.0) for t in (tanks or [])))
+    mdot_stored = pos_tank - mdot_spill
     demand_sum = float(mdot_demand.sum())
     delivered_sum = float(mdot_delivered.sum())
 
@@ -189,7 +239,11 @@ def collect_physics(net, idx) -> dict:
         "mdot_feed_kg_per_s": _r(mdot_feed),
         "mdot_demand_kg_per_s": _r(demand_sum),
         "mdot_delivered_kg_per_s": _r(delivered_sum),
-        "balance_err_kg_per_s": _r(mdot_feed - delivered_sum),
+        "mdot_stored_kg_per_s": _r(mdot_stored),
+        "mdot_spill_kg_per_s": _r(mdot_spill),
+        "mdot_exported_kg_per_s": _r(mdot_exported),
+        "balance_err_kg_per_s": _r(mdot_feed - delivered_sum - mdot_stored
+                                   - mdot_spill - mdot_exported),
     }
     return {
         "junctions": junctions,
@@ -216,6 +270,56 @@ class Simulator:
 
         # runtime consumer op log (recipes, scenario save/replay)
         self.consumer_ops: list[dict] = []
+
+        # simulated seconds per engine step (tank level integration)
+        self._dt_s = 86400.0 / float(self.settings.steps_per_day)
+
+        # tanks: level-integrating head nodes (ext_grid + controller)
+        self.tanks: list[WaterTank] = []
+        tank_meta = {m["node"]: m for m in self.index.producer_meta
+                     if m["kind"] == "tank"}
+        for spec in inputs.supply.tanks:
+            meta = tank_meta[spec.node]
+            self.tanks.append(WaterTank(
+                name=meta["name"], node=spec.node,
+                element=int(meta["element"]),
+                pid=int(meta["pid"]),
+                area_m2=float(spec.area_m2),
+                level_min_m=float(spec.level_min_m),
+                level_max_m=float(spec.level_max_m),
+                fire_reserve_m3=float(spec.fire_reserve_m3),
+                kind=spec.kind,
+                level_m=float(spec.level_initial_m),
+                level_initial_m=float(spec.level_initial_m)))
+        self._tanks_by_name = {t.name: t for t in self.tanks}
+
+        # pump stations: hysteresis rules + operator mode overrides
+        rules: list[HysteresisRule] = []
+        self.station_modes: dict[str, str] = {}
+        self._station_specs: dict = {}   # station name -> StationSpec
+        station_meta = {m["name"]: m for m in self.index.producer_meta
+                        if m["kind"] == "station"}
+        for st in inputs.supply.stations:
+            sname = st.name or f"station_{st.from_node}"
+            meta = station_meta[sname]
+            self._station_specs[sname] = st
+            if st.control.mode == "hysteresis":
+                self.station_modes[sname] = "auto"
+                rules.append(HysteresisRule(
+                    station_name=sname, pump_element=int(meta["element"]),
+                    tank_name=st.control.tank,
+                    on_below_m=float(st.control.on_below_m),
+                    off_above_m=float(st.control.off_above_m),
+                    running=bool(st.control.running),
+                    initial_running=bool(st.control.running)))
+            else:
+                self.station_modes[sname] = ("on" if st.control.running
+                                             else "off")
+        self.rules = RuleEngine(rules)
+        self._initial_station_modes = dict(self.station_modes)
+        #: station names whose check valve blocked reverse flow THIS tick
+        #: (transient, re-decided every solve — see _solve_step)
+        self.cv_closed: set[str] = set()
 
         self._last_payload: dict | None = None  # last converged _collect()
         #: blind-spot flag: true when the observed layer misses the TRUE
@@ -315,11 +419,36 @@ class Simulator:
     # -- per-tick input application ------------------------------------------
 
     def _apply_step(self, tick: int) -> None:
-        """Write the tick's demand onto the sink table (single write in M0;
+        """demand → tank heads → operating rules (all pre-solve inputs;
         the M3 demand engine and M5 PDA/emitters extend this seam)."""
+        # consumer demand: base × the diurnal factor (M2 interim; the M3
+        # archetype profiles replace the global factor)
         if len(self.index.consumers):
-            self.net.sink.loc[self.index.consumers, "mdot_kg_per_s"] = \
+            self.net.sink.loc[self.index.consumers, "mdot_kg_per_s"] = (
                 self.profiles.mdot_kg_per_s[:, tick]
+                * float(self.profiles.demand_factor[tick]))
+        # tank heads from the integrated levels
+        for tank in self.tanks:
+            tank.write_p(self.net)
+        # operating rules (hysteresis pump switching + operator overrides);
+        # tank levels are station SCADA — always observed (TF §7)
+        self.rules.evaluate(self.net, self._tanks_by_name, self.station_modes)
+        # manual stations without a rule follow their mode directly; their
+        # "auto" means the CONFIGURED state (control.running) — without this
+        # write nothing ever touches in_service again and a check-valve
+        # closure would latch silently forever (M2 review finding)
+        ruled = {r.station_name for r in self.rules.rules}
+        for meta in self.index.producer_meta:
+            if meta["kind"] != "station":
+                continue
+            mode = self.station_modes.get(meta["name"], "auto")
+            if mode in ("on", "off"):
+                self.net.pump.at[meta["element"], "in_service"] = mode == "on"
+            elif meta["name"] not in ruled:
+                spec = self._station_specs.get(meta["name"])
+                if spec is not None:
+                    self.net.pump.at[meta["element"], "in_service"] = bool(
+                        spec.control.running)
 
     # -- the step ------------------------------------------------------------
 
@@ -335,12 +464,16 @@ class Simulator:
                         apply_error)
 
         if apply_error is None:
-            outcome = solve_with_retry(self.net, self.settings.solver_iter)
+            outcome = self._solve_step()
         else:
             outcome = SolveOutcome(False, "failed", 0, 0.0, error=apply_error)
 
         if outcome.converged:
             try:
+                # tank levels advance from the SOLVED balance before the
+                # frame is collected (the frame carries this tick's level)
+                for tank in self.tanks:
+                    tank.integrate(self.net, self._dt_s)
                 payload = self._collect(tick)
                 self._last_payload = payload
             except Exception as exc:
@@ -380,6 +513,123 @@ class Simulator:
             **payload,
         )
 
+    def _solve_step(self) -> SolveOutcome:
+        """Retry-ladder solve + station operating points + check valves.
+
+        pandapipes applies pump curves EXPLICITLY per Newton iteration (no
+        dPL/dQ in the Jacobian) — against dominant static head that
+        fixed-point diverges into the reverse-bypass sink (see
+        ``StationLiftStdType``). The solver therefore sees a CONSTANT
+        per-station lift, and this outer loop finds the honest curve
+        operating point ``lift = curve(Q(lift))`` by a bracketed secant on
+        ``[0, shutoff]`` — ``g(lift) = curve(Q(lift)) − lift`` is strictly
+        decreasing (StationSpec REJECTS curves whose degree-2 fit is not:
+        models._curve_fit), so the root is unique; reverse iterates only
+        narrow the bracket from below (max-effort shutoff is tried ONCE per
+        tick — the M2 review found re-firing it turned the bisection into
+        one halving per TWO solves on marginally sized pumps). The lift is
+        warm-started tick-to-tick: quasi-steady ticks settle in one solve.
+
+        Check valves (Rückschlagklappen): a station still reversing at
+        shutoff lift closes for the tick (EPANET-style link status; upstream
+        pumps assume zero-lift zero-resistance bypass on reverse flow, which
+        would drain the Hochbehälter backwards through the works). The rules
+        re-enable it next tick, so it retries as soon as heads allow.
+        """
+        self.cv_closed.clear()
+        stations = [m for m in self.index.producer_meta
+                    if m["kind"] == "station"]
+        outcome = solve_with_retry(self.net, self.settings.solver_iter)
+        if not stations:
+            return outcome
+        pump_stds = self.net["std_types"]["pump"]
+        lo = {m["name"]: 0.0 for m in stations}
+        hi = {m["name"]: pump_stds[m["name"]].shutoff_bar() for m in stations}
+        last: dict[str, tuple[float, float]] = {}   # secant memory (lift, g)
+        # one max-effort (shutoff) try per station per tick — gating on the
+        # BRACKET instead (M2 review finding) re-fired shutoff after every
+        # reverse iterate (a forward point AT shutoff never shrinks hi), so
+        # marginally sized pumps burnt half the solve budget re-computing
+        # the identical reverse state and cold starts exhausted the cap
+        max_effort_tried = {m["name"]: False for m in stations}
+        for _ in range(MAX_STATION_SOLVES):
+            if not outcome.converged:
+                return outcome
+            settled = True
+            for meta in stations:
+                name, el = meta["name"], int(meta["element"])
+                if not bool(self.net.pump.at[el, "in_service"]):
+                    continue
+                if el not in self.net.res_pump.index:
+                    continue
+                std = pump_stds[name]
+                mdot = float(self.net.res_pump.at[el, "mdot_from_kg_per_s"])
+                log.debug("station %s: lift=%.4f mdot=%.4f", name,
+                          std.lift_bar, mdot)
+                if mdot < -CV_EPS_KG_PER_S:
+                    settled = False
+                    # reverse flow = the lift is BELOW the reversal cliff:
+                    # the root (if any) lies above — bracket accordingly
+                    if std.shutoff_bar() - std.lift_bar < CV_CLOSE_MARGIN_BAR:
+                        # reversing at (essentially) shutoff head: no
+                        # forward operating point exists — the clapper shuts
+                        self.net.pump.at[el, "in_service"] = False
+                        self.cv_closed.add(name)
+                    else:
+                        lo[name] = max(lo[name], std.lift_bar)
+                        if not max_effort_tried[name]:
+                            # decisive single try: forward at shutoff
+                            # brackets the root, reverse there closes the
+                            # valve next round
+                            max_effort_tried[name] = True
+                            std.lift_bar = std.shutoff_bar()
+                        else:
+                            std.lift_bar = 0.5 * (lo[name] + hi[name])
+                        last.pop(name, None)
+                    continue
+                max_effort_tried[name] = True   # forward point exists
+                q_m3h = max(0.0, mdot) / RHO_KG_M3 * 3600.0
+                g = std.curve_lift_bar(q_m3h) - std.lift_bar
+                if abs(g) <= LIFT_TOL_BAR:
+                    continue
+                settled = False
+                if g > 0:                       # root lies above this lift
+                    lo[name] = max(lo[name], std.lift_bar)
+                else:
+                    hi[name] = min(hi[name], std.lift_bar)
+                # secant only from FORWARD-flow points: the reverse/deadhead
+                # state (q = 0, curve plateau at shutoff) carries no local
+                # gradient — a secant across that cliff leaps wildly
+                prev = last.get(name)
+                nxt = None
+                if (q_m3h > 0.0 and prev is not None
+                        and abs(std.lift_bar - prev[0]) > 1e-9
+                        and abs(g - prev[1]) > 1e-12):
+                    nxt = (std.lift_bar
+                           - g * (std.lift_bar - prev[0]) / (g - prev[1]))
+                if nxt is None or not lo[name] < nxt < hi[name]:
+                    # local damped step (≤ 1 bar), never a leap across the
+                    # bracket — the warm-started lift is trusted to be near
+                    # the root; the bracket midpoint is the last resort
+                    nxt = std.lift_bar + max(-1.0, min(1.0, g))
+                    if not lo[name] < nxt < hi[name]:
+                        nxt = 0.5 * (lo[name] + hi[name])
+                if q_m3h > 0.0:
+                    last[name] = (std.lift_bar, g)
+                std.lift_bar = nxt
+            if settled:
+                return outcome
+            outcome = solve_with_retry(self.net, self.settings.solver_iter)
+        if outcome.converged:
+            # honest degradation: frames carry curve-inconsistent lift
+            log.warning("station operating point not settled after %d solves",
+                        MAX_STATION_SOLVES)
+            return SolveOutcome(
+                True, "degraded", outcome.tier, outcome.solve_ms,
+                error="station operating point not settled after "
+                      f"{MAX_STATION_SOLVES} solves")
+        return outcome
+
     def _reset_initialization(self) -> None:
         """After swaps/failures: build-time pressures (pn_bar only)."""
         self.net.junction["pn_bar"] = self.index.init_pn_bar
@@ -388,25 +638,47 @@ class Simulator:
         """Last converged physics (or empty shells) + live controls."""
         payload = dict(self._last_payload) if self._last_payload else {
             "junctions": [], "pipes": [], "consumers": [],
-            "producers": [], "summary": {},
+            "producers": [], "tanks": [], "summary": {},
         }
         payload["controls"] = self._controls_dict()
         return payload
 
+    # -- operations reset (scenario load / bulk-export replay) -----------------
+
+    def reset_operations(self) -> None:
+        """Run-state back to the bundle's initial operating point: tank
+        levels to level_initial, station modes to their configured state
+        (recipes keep configuration; this is the deterministic-replay
+        normalization the exporter and scenario loads share)."""
+        for tank in self.tanks:
+            tank.reset()
+            tank.write_p(self.net)
+        self.station_modes = dict(self._initial_station_modes)
+        self.rules.reset()
+        self.cv_closed.clear()
+        # station operating points back to the cold-start seed — a replay
+        # must not inherit the live warm lift (deterministic exports)
+        for meta in self.index.producer_meta:
+            if meta["kind"] != "station":
+                continue
+            std = self.net["std_types"]["pump"].get(meta["name"])
+            if std is not None and hasattr(std, "lift_seed_bar"):
+                std.lift_bar = float(std.lift_seed_bar)
+
     # -- derived quantities & wire payload -------------------------------------
 
     def _controls_dict(self) -> dict:
-        # M0: no controllers exist yet (tank/pump/rule controllers arrive in
-        # M2). The blind-spot flag survives as meta-information about the
-        # sensor layout.
-        return {"blind_spot": self._blind_spot}
+        # station operator modes are config (scenario-saved); blind_spot is
+        # meta-information about the sensor layout.
+        return {"blind_spot": self._blind_spot,
+                "stations": dict(self.station_modes)}
 
     def _collect(self, tick: int) -> dict:
         net, idx = self.net, self.index
 
         # the four ground-truth wire keys + aux — shared with the forward
         # observer (estimator.py) so twin and truth use the same formulas
-        physics = collect_physics(net, idx)
+        physics = collect_physics(net, idx, tanks=self.tanks)
         worst_pos = physics["aux"]["worst_pos"]
 
         producers = []
@@ -415,11 +687,23 @@ class Simulator:
             entry = {"id": int(meta["pid"]), "kind": meta["kind"],
                      "name": meta["name"], "node": meta["node"]}
             if meta["kind"] == "slack":
+                # SIGNED feed since M2 (multi-source nets): positive =
+                # supplying the net, negative = absorbing (exporting) —
+                # abs() made an absorbing slack indistinguishable from a
+                # supplying one (M2 review finding)
                 entry.update({
                     "p_bar": _r(net.ext_grid.at[meta["element"], "p_bar"]),
-                    "mdot_kg_per_s": _r(abs(
-                        net.res_ext_grid.mdot_kg_per_s.loc[meta["element"]])),
+                    "mdot_kg_per_s": _r(
+                        -net.res_ext_grid.mdot_kg_per_s.loc[meta["element"]]),
                 })
+            elif meta["kind"] == "tank":
+                tank = self._tanks_by_name.get(meta["name"])
+                if tank is not None:
+                    entry.update({
+                        "p_bar": _r(tank.p_bar()),
+                        "mdot_kg_per_s": _r(tank.mdot_kg_per_s),
+                        "level_m": _r(tank.level_m, 4),
+                    })
             elif meta["kind"] == "prv":
                 # PRV entries are STATION SCADA (real Druckminderer stations
                 # carry in/out gauges + a flowmeter — TF §7): like the source
@@ -427,7 +711,7 @@ class Simulator:
                 # (negative = reverse flow through the valve) and `reducing`
                 # honestly flags the press_control failure modes the M1
                 # static PRV cannot prevent (boosting when the upstream head
-                # collapses, back-feeding) — M2 supervision acts on them.
+                # collapses, back-feeding) — M2+ supervision acts on them.
                 r = net.res_press_control.loc[meta["element"]]
                 entry.update({
                     "p_set_bar": _r(net.press_control.at[
@@ -437,6 +721,23 @@ class Simulator:
                     "mdot_kg_per_s": _r(r.mdot_from_kg_per_s),
                     "reducing": bool(r.deltap_bar < 0),
                 })
+            elif meta["kind"] == "station":
+                running = bool(net.pump.at[meta["element"], "in_service"])
+                entry["running"] = running
+                entry["mode"] = self.station_modes.get(meta["name"], "auto")
+                # honest station SCADA: the check valve closed against
+                # reverse flow this tick (pump commanded on, delivering 0)
+                entry["cv_closed"] = meta["name"] in self.cv_closed
+                if running and meta["element"] in net.res_pump.index:
+                    r = net.res_pump.loc[meta["element"]]
+                    entry.update({
+                        "p_in_bar": _r(r.p_from_bar),
+                        "p_out_bar": _r(r.p_to_bar),
+                        "mdot_kg_per_s": _r(r.mdot_from_kg_per_s),
+                    })
+                else:
+                    entry.update({"p_in_bar": None, "p_out_bar": None,
+                                  "mdot_kg_per_s": _r(0.0)})
             producers.append(entry)
 
         payload = {
@@ -444,6 +745,7 @@ class Simulator:
             "pipes": physics["pipes"],
             "consumers": physics["consumers"],
             "producers": producers,
+            "tanks": [t.payload() for t in self.tanks],
             "summary": physics["summary"],
             "controls": self._controls_dict(),
         }
@@ -490,6 +792,15 @@ class Simulator:
         """
         idx, p = self.index, self.profiles
         jj = idx.junction[node]  # KeyError -> unknown node (API: 400)
+        head_nodes = {m["node"] for m in idx.producer_meta
+                      if m["kind"] in ("slack", "tank")}
+        if node in head_nodes:
+            # a sink on the fixed-pressure junction is served straight from
+            # the boundary and pins the Schlechtpunkt to the source's low
+            # gauge pressure (M2 review finding; loader rejects it too)
+            raise KeyError(
+                f"node {node!r} is a head source (tank/ext_grid) — "
+                "consumers must attach to network nodes")
         name = name or f"consumer_{node}_{len(idx.consumers)}"
         mdot = float(mdot_kg_per_s)
         sk = pp.create_sink(self.net, junction=jj, mdot_kg_per_s=mdot,

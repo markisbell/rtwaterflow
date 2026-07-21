@@ -138,8 +138,12 @@ class BulkExporter:
         """Normalize *sim* for a deterministic from-midnight replay.
 
         The state reset here is exactly the run-state a fresh scenario load
-        discards too — configuration (consumers, sensor placement) is kept:
+        discards too — configuration (consumers, sensor placement, station
+        control setup) is kept:
 
+        * operations back to the bundle's initial point: tank levels to
+          level_initial (heads re-written), station modes to their
+          configured state;
         * cold initialization (build-time pressures, pn_bar only) —
           replacing the live warm-start state;
         * measurement windows fresh (standard-mode meters cold-start
@@ -150,6 +154,7 @@ class BulkExporter:
         its live recording from this same normalized state.
         """
         from dataclasses import replace
+        sim.reset_operations()
         sim.measurements._reset_windows()
         sim._last_payload = None
         sim._blind_spot = None

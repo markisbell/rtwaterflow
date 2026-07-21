@@ -1,6 +1,23 @@
 {
  "pipes": [
   {
+   "from_node": "ws",
+   "to_node": "hb",
+   "dn": 150,
+   "material": "GGG",
+   "year_laid": 1994,
+   "geometry": [
+    [
+     49.4502,
+     9.0057
+    ],
+    [
+     49.46,
+     9.0
+    ]
+   ]
+  },
+  {
    "from_node": "hb",
    "to_node": "z1",
    "dn": 150,

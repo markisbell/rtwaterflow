@@ -171,10 +171,23 @@ class NetworkCatalog:
 
 def preview(entry: NetworkEntry, inputs: NetInputs) -> dict:
     """Net-free preview stats for ``GET /networks/{id}`` (NetzStudio col 3)."""
+    from .network_builder import BAR_PER_M
+
     pipe_km = float(sum(p.length_km for p in inputs.pipes.pipes))
     demand = float(sum(c.mdot_kg_per_s for c in inputs.consumers.consumers))
     elevations = [j.elevation_m for j in inputs.structure.junctions]
-    slack = next(s for s in inputs.supply.supplies if s.kind == "ext_grid")
+    # first head source: an ext_grid if present, else the first tank —
+    # tank-only bundles are contract-legal since M2 and used to 500 the
+    # preview/import routes here (StopIteration; M2 review finding)
+    slack = next((s for s in inputs.supply.supplies if s.kind == "ext_grid"),
+                 None)
+    if slack is not None:
+        supply_block = {"node": slack.node, "name": slack.name,
+                        "p_bar": slack.p_bar}
+    else:
+        tk = inputs.supply.tanks[0]   # SupplyFile guarantees >= 1 head source
+        supply_block = {"node": tk.node, "name": tk.name or f"tank_{tk.node}",
+                        "p_bar": round(tk.level_initial_m * BAR_PER_M, 4)}
     return {
         "id": entry.id,
         "name": inputs.name,
@@ -191,8 +204,5 @@ def preview(entry: NetworkEntry, inputs: NetInputs) -> dict:
         "resolution_minutes": inputs.environment.resolution_minutes,
         "steps": inputs.environment.steps,
         "n_days": inputs.n_days,
-        "supply": {
-            "node": slack.node, "name": slack.name,
-            "p_bar": slack.p_bar,
-        },
+        "supply": supply_block,
     }
