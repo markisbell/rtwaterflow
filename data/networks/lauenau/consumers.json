@@ -1,0 +1,54 @@
+{
+ "consumers": [
+  {
+   "node": "d1",
+   "name": "Hauptstraße 1-25",
+   "mdot_kg_per_s": 0.9,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 630
+   }
+  },
+  {
+   "node": "d2",
+   "name": "Am Kalversberg (MFH)",
+   "mdot_kg_per_s": 1.1,
+   "kind": "residential_village",
+   "storeys": 3,
+   "size": {
+    "population": 770
+   }
+  },
+  {
+   "node": "d3",
+   "name": "Talstraße 2-40",
+   "mdot_kg_per_s": 0.8,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 560
+   }
+  },
+  {
+   "node": "d4",
+   "name": "Gewerbegebiet Süd",
+   "mdot_kg_per_s": 0.7,
+   "kind": "industry",
+   "storeys": 1,
+   "size": {
+    "employees": 55
+   }
+  },
+  {
+   "node": "d5",
+   "name": "Rodenberger Weg",
+   "mdot_kg_per_s": 0.6,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 420
+   }
+  }
+ ]
+}

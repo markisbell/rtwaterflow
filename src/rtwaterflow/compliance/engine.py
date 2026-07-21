@@ -170,6 +170,7 @@ class ComplianceEngine:
         self._check_pipes(payload, out)
         self._check_tanks(payload, out)
         self._check_fire(payload, out)
+        self._check_wells(payload, out)
         if solver_status == "degraded":
             out.append(Finding(
                 "info", "Modellhinweis", "solver", "system", "solver",
@@ -342,6 +343,42 @@ class ComplianceEngine:
                     text_de=(f"Hydrant {em.get('name', node)}: nur "
                              f"{_de(delivered, 0)} von {_de(target, 0)} m³/h "
                              "Löschwasser lieferbar (W 405)")))
+
+    def _check_wells(self, payload: dict, out: list[Finding]) -> None:
+        """M6 raw-water side. Water-right exceedance is a COMPLIANCE event,
+        not a hydraulic failure (WHG §§8–10 — booked separately, TF §5); a
+        well tripped by low-level protection or the aquifer near the screen
+        top is a supply-security warning."""
+        for wf in payload.get("wellfields", []):
+            name = wf["name"]
+            wr = wf.get("water_right", {})
+            if wr.get("year_exceeded"):
+                out.append(Finding(
+                    "violation", "WHG §§8–10", "water_right", "system", name,
+                    value=wr.get("year_m3"), threshold=wr.get("year_limit_m3"),
+                    text_de=(f"Wasserrecht überschritten: {name} entnahm "
+                             f"{_de(wr.get('year_m3') or 0, 0)} m³ von "
+                             f"{_de(wr.get('year_limit_m3') or 0, 0)} m³ "
+                             "Jahresmenge")))
+            elif wr.get("day_exceeded"):
+                out.append(Finding(
+                    "warning", "WHG §§8–10", "water_right", "system", name,
+                    value=wr.get("day_m3"), threshold=wr.get("day_limit_m3"),
+                    text_de=(f"Tagesentnahme über dem Wasserrecht: {name} "
+                             f"{_de(wr.get('day_m3') or 0, 0)} von "
+                             f"{_de(wr.get('day_limit_m3') or 0, 0)} m³/d")))
+            # well ageing (Verockerung, W 130): ~10 % Q/s loss already
+            # warrants regeneration
+            for w in wf.get("wells", []):
+                if (w.get("aged_fraction") or 0.0) >= 0.10:
+                    out.append(Finding(
+                        "warning", "DVGW W 130", "well_ageing", "system",
+                        f"{name}/{w['name']}",
+                        value=round(w["aged_fraction"] * 100, 1),
+                        threshold=10.0,
+                        text_de=(f"Brunnen {w['name']}: spez. Ergiebigkeit "
+                                 f"um {_de(w['aged_fraction'] * 100, 0)} % "
+                                 "gesunken — Regenerierung prüfen (W 130)")))
 
     def _check_tanks(self, payload: dict, out: list[Finding]) -> None:
         day = self.steps_per_day

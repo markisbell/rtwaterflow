@@ -23,6 +23,9 @@ EXPECTED_BBOX = {
     # Mustertal: the Gegenbehälter valley line, a few km east of Musterdorf
     # (300-330 m elevations, Wasserturm on the eastern rise)
     "mustertal": (49.46, 49.48, 9.02, 9.05),
+    # Lauenau: the M6 wells & aquifer town in the Weserbergland (modelled
+    # on the real Lauenau 2020 water emergency; 210-268 m elevations)
+    "lauenau": (52.29, 52.30, 9.38, 9.41),
 }
 
 

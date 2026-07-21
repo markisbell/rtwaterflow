@@ -21,6 +21,7 @@ import type {
   StepResult,
   TankState,
   Topology,
+  WellFieldState,
 } from "./types";
 
 // All backend calls go through "/api" (Vite dev proxy / nginx in prod);
@@ -98,6 +99,15 @@ export const api = {
     del<{ removed: string }>(`/emitter/${encodeURIComponent(name)}`),
   setPda: (enabled: boolean) =>
     post<{ pda_enabled: boolean }>("/pda", { enabled }),
+
+  // ---- raw-water side: wells / aquifer (M6) ----
+  wellfields: () => get<{ wellfields: WellFieldState[] }>("/wellfields"),
+  setDrought: (factor: number) =>
+    post<{ drought_factor: number }>("/wellfield/drought", { factor }),
+  regenerateWell: (wellfield: string, well: string) =>
+    post<{ wellfield: string; well: string; spec_capacity_now: number }>(
+      `/wellfield/${encodeURIComponent(wellfield)}/well/`
+      + `${encodeURIComponent(well)}/regenerate`),
 
   // ---- consumers (M0: fixed demand) ----
   addConsumer: (body: {

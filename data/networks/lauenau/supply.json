@@ -1,0 +1,95 @@
+{
+ "supplies": [],
+ "prvs": [],
+ "tanks": [
+  {
+   "node": "bw",
+   "name": "Reinwasserbehälter",
+   "kind": "break",
+   "area_m2": 40.0,
+   "level_min_m": 0.5,
+   "level_max_m": 4.0,
+   "level_initial_m": 3.0,
+   "fire_reserve_m3": 0.0
+  },
+  {
+   "node": "hb",
+   "name": "Hochbehälter Kalversberg",
+   "kind": "durchlauf",
+   "area_m2": 90.0,
+   "level_min_m": 1.0,
+   "level_max_m": 5.0,
+   "level_initial_m": 3.5,
+   "fire_reserve_m3": 100.0
+  }
+ ],
+ "stations": [
+  {
+   "from_node": "bw",
+   "to_node": "pw",
+   "name": "Netzpumpe Lauenau",
+   "curve": [
+    [
+     0.0,
+     7.0
+    ],
+    [
+     15.0,
+     6.4
+    ],
+    [
+     30.0,
+     5.2
+    ],
+    [
+     45.0,
+     3.4
+    ]
+   ],
+   "control": {
+    "mode": "hysteresis",
+    "tank": "Hochbehälter Kalversberg",
+    "on_below_m": 2.5,
+    "off_above_m": 4.5
+   }
+  }
+ ],
+ "wellfields": [
+  {
+   "name": "Brunnenfeld Rodenberg",
+   "break_tank": "Reinwasserbehälter",
+   "pump_head_m": 85.0,
+   "efficiency": 0.6,
+   "on_below_m": 2.0,
+   "off_above_m": 3.6,
+   "interference_fraction": 0.15,
+   "aquifer": {
+    "storativity_area_m2": 1500.0,
+    "level_initial_m": 100.0,
+    "recharge_m3_per_d_mean": 520.0
+   },
+   "water_right": {
+    "m3_per_a": 260000.0,
+    "m3_per_d": 750.0
+   },
+   "wells": [
+    {
+     "name": "Brunnen 1",
+     "static_level_m": 100.0,
+     "spec_capacity_m3h_per_m": 1.6,
+     "screen_top_m": 88.0,
+     "rated_m3_h": 14.0,
+     "q_s_decay_per_a": 0.04
+    },
+    {
+     "name": "Brunnen 2",
+     "static_level_m": 100.0,
+     "spec_capacity_m3h_per_m": 1.5,
+     "screen_top_m": 88.0,
+     "rated_m3_h": 14.0,
+     "q_s_decay_per_a": 0.04
+    }
+   ]
+  }
+ ]
+}

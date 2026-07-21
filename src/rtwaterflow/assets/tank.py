@@ -49,6 +49,9 @@ class WaterTank:
     #: platform-unique producer pid (the wire id — NEVER the per-kind
     #: list index, which collides with other producer kinds)
     pid: int = 0
+    #: M6: external raw-water inflow [kg/s] a well field lifts INTO this
+    #: tank (the Reinwasserbehälter break tank); 0 for a normal Hochbehälter
+    external_inflow_kg_per_s: float = 0.0
     #: net mass flow of the last integration step (+ = filling) [kg/s]
     mdot_kg_per_s: float = field(default=0.0, repr=False)
     #: overflow spill of the last step [kg/s]: inflow the clamped level
@@ -67,8 +70,12 @@ class WaterTank:
     # -- level integration (post-solve) --------------------------------------
 
     def integrate(self, net, dt_s: float) -> None:
-        """Advance the level from the SOLVED ext_grid balance."""
-        mdot = float(net.res_ext_grid.mdot_kg_per_s.loc[self.element])
+        """Advance the level from the SOLVED ext_grid balance plus any
+        external raw-water inflow (M6 break tank: the well production)."""
+        # res_ext_grid.mdot is negative when the tank SUPPLIES the network;
+        # the external inflow is positive (a well field FILLS the tank)
+        mdot = (float(net.res_ext_grid.mdot_kg_per_s.loc[self.element])
+                + self.external_inflow_kg_per_s)
         self.mdot_kg_per_s = mdot
         d_level = (mdot / RHO_KG_M3) * dt_s / self.area_m2
         level = self.level_m + d_level
@@ -90,6 +97,7 @@ class WaterTank:
         self.empty = False
         self.mdot_kg_per_s = 0.0
         self.mdot_spill_kg_per_s = 0.0
+        self.external_inflow_kg_per_s = 0.0
 
     # -- KPIs -----------------------------------------------------------------
 

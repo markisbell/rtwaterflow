@@ -99,6 +99,18 @@ limits · `500` internal failures only —
 - **`GET /emitters`** — Live emitter states + the PDA toggle.
 - **`POST /pda`** — ON (default): undersupplied taps deliver less (Wagner). OFF: fixed demand — undersupply shows as impossible negative pressure (the M0 contrast that motivates PDA).
 
+## wellfield
+
+| Method | Path | Summary |
+|---|---|---|
+| `POST` | `/wellfield/drought` | Set the drought factor |
+| `POST` | `/wellfield/{name}/well/{well}/regenerate` | Regenerate a well |
+| `GET` | `/wellfields` | Well-field states (raw-water side) |
+
+- **`POST /wellfield/drought`** — Scale groundwater recharge on every aquifer. Below normal the level declines under abstraction, capping well production — the Lauenau drought mechanism.
+- **`POST /wellfield/{name}/well/{well}/regenerate`** — Well regeneration (W 130): restore ~90 % of the nameplate specific capacity (the maintenance action against Verockerung/ageing).
+- **`GET /wellfields`** — Live raw-side states: aquifer level, production, capacity, well ageing, water-right accounting, energy KPI.
+
 ## consumers
 
 | Method | Path | Summary |

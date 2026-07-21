@@ -12,6 +12,7 @@ import OverviewSection from "../components/OverviewSection";
 import AlarmSection from "../components/AlarmSection";
 import WorstPointSection from "../components/WorstPointSection";
 import TankSection from "../components/TankSection";
+import WellFieldSection from "../components/WellFieldSection";
 import EnvironmentSection from "../components/EnvironmentSection";
 import EventSection from "../components/EventSection";
 import ConsumerTableSection from "../components/ConsumerTableSection";
@@ -42,6 +43,7 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
   const [alOpen, setAlOpen] = useState(true);
   const [wpOpen, setWpOpen] = useState(true);
   const [tkOpen, setTkOpen] = useState(true);
+  const [wfOpen, setWfOpen] = useState(true);
   const [evOpen, setEvOpen] = useState(false);
   const [envOpen, setEnvOpen] = useState(true);
   const [ctOpen, setCtOpen] = useState(false);
@@ -249,6 +251,9 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
 
         <TankSection open={tkOpen} onToggle={() => setTkOpen((v) => !v)}
                      topo={topo} latest={latest} />
+
+        <WellFieldSection open={wfOpen} onToggle={() => setWfOpen((v) => !v)}
+                          latest={latest} />
 
         <EnvironmentSection open={envOpen}
                             onToggle={() => setEnvOpen((v) => !v)}

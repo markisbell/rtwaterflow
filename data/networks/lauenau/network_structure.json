@@ -1,0 +1,85 @@
+{
+ "name": "Lauenau (Brunnenfeld)",
+ "junctions": [
+  {
+   "name": "bw",
+   "kind": "source",
+   "geo": [
+    52.296,
+    9.387
+   ],
+   "elevation_m": 210.0,
+   "pn_bar": 0.29
+  },
+  {
+   "name": "pw",
+   "kind": "node",
+   "geo": [
+    52.2961,
+    9.3872
+   ],
+   "elevation_m": 210.0,
+   "pn_bar": 5.0
+  },
+  {
+   "name": "hb",
+   "kind": "source",
+   "geo": [
+    52.299,
+    9.393
+   ],
+   "elevation_m": 268.0,
+   "pn_bar": 0.34
+  },
+  {
+   "name": "d1",
+   "kind": "consumer",
+   "geo": [
+    52.2985,
+    9.3945
+   ],
+   "elevation_m": 250.0,
+   "pn_bar": 2.1
+  },
+  {
+   "name": "d2",
+   "kind": "consumer",
+   "geo": [
+    52.298,
+    9.396
+   ],
+   "elevation_m": 244.0,
+   "pn_bar": 2.69
+  },
+  {
+   "name": "d3",
+   "kind": "consumer",
+   "geo": [
+    52.2975,
+    9.3975
+   ],
+   "elevation_m": 240.0,
+   "pn_bar": 3.08
+  },
+  {
+   "name": "d4",
+   "kind": "consumer",
+   "geo": [
+    52.297,
+    9.399
+   ],
+   "elevation_m": 236.0,
+   "pn_bar": 3.48
+  },
+  {
+   "name": "d5",
+   "kind": "consumer",
+   "geo": [
+    52.2965,
+    9.4005
+   ],
+   "elevation_m": 232.0,
+   "pn_bar": 3.87
+  }
+ ]
+}

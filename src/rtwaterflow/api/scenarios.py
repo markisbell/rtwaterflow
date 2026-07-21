@@ -65,6 +65,10 @@ def scenarios_save(req: ScenarioSaveRequest) -> dict:
         "hydraulics": {
             "pda_enabled": sim.pda.enabled,
             "leak_coefficient_per_km": sim.leak_coefficient_per_km,
+            # M6 drought override (config; the aquifer level itself is
+            # run-state and starts from the bundle on replay)
+            "drought_factor": (sim.wellfields[0].aquifer.drought_factor
+                               if sim.wellfields else None),
             "hydrants": [
                 {"node": e.node, "target_m3_h": e.target_m3_h,
                  "name": e.name, "duration_ticks": e.duration_ticks}
@@ -156,6 +160,11 @@ async def scenarios_load(sid: str) -> dict:
             sim.set_leakage(float(hyd["leak_coefficient_per_km"]))
         except Exception:  # noqa: BLE001
             log.warning("scenario '%s': skipped leakage", sid)
+    if hyd.get("drought_factor") is not None and sim.wellfields:
+        try:
+            sim.set_drought(float(hyd["drought_factor"]))
+        except Exception:  # noqa: BLE001
+            log.warning("scenario '%s': skipped drought", sid)
     for h in hyd.get("hydrants", []):
         try:
             sim.open_hydrant(node=h["node"],

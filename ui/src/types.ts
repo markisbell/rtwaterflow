@@ -225,6 +225,32 @@ export interface EmitterInfo {
   pda_enabled: boolean;
 }
 
+/** One M6 well (raw-water side). */
+export interface WellState {
+  name: string;
+  running: boolean;
+  spec_capacity_now: number;
+  spec_capacity_rated: number;
+  aged_fraction: number;
+}
+
+/** One M6 well field — the raw-water side (aquifer, production, permit). */
+export interface WellFieldState {
+  name: string;
+  aquifer_level_m: number;
+  aquifer_drought_factor: number;
+  production_m3_h: number;
+  capacity_m3_h: number;
+  energy_kwh_per_m3: number | null;
+  n_wells_running: number;
+  wells: WellState[];
+  water_right: {
+    day_m3: number; day_limit_m3: number | null;
+    year_m3: number; year_limit_m3: number | null;
+    day_exceeded: boolean; year_exceeded: boolean;
+  };
+}
+
 /** One M4 compliance finding (German rule citation on the wire). */
 export interface Finding {
   severity: "info" | "warning" | "violation";
@@ -371,6 +397,8 @@ export interface StepResult {
   tanks: TankState[];
   /** M5 emitters — equipment SCADA, present in strict mode too. */
   emitters: EmitterState[];
+  /** M6 well fields — raw-water SCADA, present in strict mode too. */
+  wellfields: WellFieldState[];
   controls: Controls;
   measurements: Measurements;
   observed_summary: ObservedSummary | null;

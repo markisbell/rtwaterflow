@@ -244,7 +244,9 @@ class TankSpec(_StrictModel):
     level_initial_m: float = Field(gt=0)
     #: dedicated Löschwasserreserve [m³] held ABOVE level_min (W 405/W 300-1)
     fire_reserve_m3: float = Field(default=0.0, ge=0)
-    kind: Literal["durchlauf", "gegen"] = "durchlauf"
+    #: ``break`` is the Reinwasserbehälter (M6): the raw/network decoupling
+    #: tank a well field fills; hydraulically an ext_grid like the others
+    kind: Literal["durchlauf", "gegen", "break"] = "durchlauf"
 
     @model_validator(mode="after")
     def _levels(self) -> "TankSpec":
@@ -338,11 +340,77 @@ class StationSpec(_StrictModel):
         return self
 
 
+class WellSpec(_StrictModel):
+    """One vertical filter well (Vertikalfilterbrunnen, W 118/W 123, M6)."""
+
+    name: str
+    static_level_m: float                              # Ruhewasserspiegel
+    spec_capacity_m3h_per_m: float = Field(gt=0)       # Q/s
+    screen_top_m: float                                # Filteroberkante
+    rated_m3_h: float = Field(gt=0)
+    q_s_decay_per_a: float = Field(default=0.03, ge=0, le=0.5)
+    protection_margin_m: float = Field(default=1.0, ge=0)
+
+    @model_validator(mode="after")
+    def _levels(self) -> "WellSpec":
+        if not (self.screen_top_m < self.static_level_m):
+            raise ValueError(
+                f"well {self.name}: screen_top_m must be below static_level_m")
+        return self
+
+
+class AquiferSpec(_StrictModel):
+    """Single linear reservoir (Einzellinearspeicher, TF §5, M6)."""
+
+    storativity_area_m2: float = Field(gt=0)   # S_y·A [m²/m] drop per m³
+    level_initial_m: float
+    recharge_m3_per_d_mean: float = Field(ge=0)
+
+
+class WaterRightSpec(_StrictModel):
+    """Abstraction permit (WHG §§8–10) — a compliance cap, not a physical
+    limit (exceeding it is a warning, not a hydraulic failure)."""
+
+    m3_per_a: Optional[float] = Field(default=None, gt=0)
+    m3_per_d: Optional[float] = Field(default=None, gt=0)
+
+
+class WellFieldSpec(_StrictModel):
+    """A well field feeding a break tank (Reinwasserbehälter). The raw side
+    is pure Python (assets/wellfield.py); the break tank is the only shared
+    hydraulic state (M6, TF §5)."""
+
+    name: str
+    wells: list[WellSpec] = Field(min_length=1)
+    aquifer: AquiferSpec
+    #: the Reinwasserbehälter this field fills — a TankSpec with kind "break"
+    break_tank: str
+    pump_head_m: float = Field(gt=0)           # well → break-tank lift
+    efficiency: float = Field(default=0.62, gt=0.1, le=1.0)
+    water_right: WaterRightSpec = Field(default_factory=WaterRightSpec)
+    interference_fraction: float = Field(default=0.15, ge=0, le=1.0)
+    #: break-tank level hysteresis for the well pumps (fill below on, stop
+    #: above off) — the canonical two-point control (TF §5)
+    on_below_m: float = Field(gt=0)
+    off_above_m: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _band(self) -> "WellFieldSpec":
+        if not (self.on_below_m < self.off_above_m):
+            raise ValueError(
+                f"well field {self.name}: on_below_m < off_above_m")
+        names = [w.name for w in self.wells]
+        if len(set(names)) != len(names):
+            raise ValueError(f"well field {self.name}: duplicate well names")
+        return self
+
+
 class SupplyFile(_StrictModel):
     supplies: list[SupplySpec] = Field(default_factory=list)
     prvs: list[PrvSpec] = Field(default_factory=list)
     tanks: list[TankSpec] = Field(default_factory=list)
     stations: list[StationSpec] = Field(default_factory=list)
+    wellfields: list[WellFieldSpec] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _head_sources(self) -> "SupplyFile":
@@ -381,6 +449,17 @@ class SupplyFile(_StrictModel):
                 "two stations on the same node pair (parallel pump "
                 "branches) — pandapipes cannot solve this (issue #693); "
                 "model parallel pumps as ONE station with a combined curve")
+        # M6 well fields must fill a real break tank
+        break_tanks = {t.name or f"tank_{t.node}" for t in self.tanks
+                       if t.kind == "break"}
+        wf_names = [w.name for w in self.wellfields]
+        if len(set(wf_names)) != len(wf_names):
+            raise ValueError("well field names must be unique")
+        for wf in self.wellfields:
+            if wf.break_tank not in break_tanks:
+                raise ValueError(
+                    f"well field {wf.name}: break_tank {wf.break_tank!r} is "
+                    "not a tank with kind 'break'")
         return self
 
 

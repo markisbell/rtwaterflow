@@ -78,6 +78,10 @@ _ELEMENT_FILES = (
     ("emitters", "emitters.csv",
      ("name", "node", "kind", "coefficient", "exponent", "target_m3_h",
       "expires_tick", "mdot_kg_per_s", "m3_per_h")),
+    ("wellfields", "wellfields.csv",
+     ("name", "aquifer_level_m", "aquifer_drought_factor", "production_m3_h",
+      "capacity_m3_h", "energy_kwh_per_m3", "n_wells_running",
+      "wr_day_m3", "wr_day_limit_m3", "wr_year_m3", "wr_year_limit_m3")),
 )
 # the Gemessen layer (measurements.consumers / measurements.nodes lists)
 _MEAS_FILES = (

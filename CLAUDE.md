@@ -560,7 +560,68 @@ draw, or a burst that craters the zone) that the damped fixed point cannot
 settle in 20 iterations is honestly reported `degraded` (never a false
 "ok" / never a 500); the warm-started next tick usually settles.
 
-- Next: **M6 — wells & aquifer** (roadmap §6, §4.5): WellField/Aquifer
-  (linear-reservoir drawdown, ageing, water rights, energy KPI), break-tank
-  coupling, the Lauenau drought scenario (source cap < peak demand → tank
-  empties → unsupplied households).
+### 2026-07-21 — M6: wells & aquifer (branch `m0-fork-strip`)
+
+**Built** (roadmap §6 M6, §4.5; TF §5):
+
+- **Raw-water side is pure Python** (`assets/wellfield.py`) — the
+  Reinwasserbehälter (break tank) hydraulically DECOUPLES it from the
+  pandapipes network (TF §5), so wells + aquifer + accounting are a mass
+  balance, no pandapipes. `Aquifer` (single linear reservoir:
+  `dh/dt = (recharge·drought − ΣQ)/(S_y·A)`, seasonal recharge cosine
+  peaking mid-winter, drought factor); `Well` (drawdown `Q/(Q/s)`,
+  filter-screen protection caps the yield, ageing erodes `Q/s` faster at
+  deep drawdown, `regenerate` → 90 %, Sichardt mutual interference);
+  `WellField` (aggregates, produces the break-tank inflow, books the
+  water right (WHG §§8–10) + energy `kWh/m³`).
+- **Coupling**: a `TankSpec` kind `"break"` is the Reinwasserbehälter;
+  `WaterTank.integrate` adds `external_inflow_kg_per_s` (well production)
+  to the network draw. `Simulator._step_wellfields` (pre-solve): the well
+  pumps fill the break tank on its own hysteresis (capped by the aquifer),
+  the aquifer steps, and a network pump whose SUCTION is a break tank
+  TRIPS when it runs empty (low-level protection — recovers on refill, no
+  latch). **The Lauenau cascade**: drought → falling aquifer → well
+  capacity caps below the peak → break tank empties → Netzpumpe trips →
+  Hochbehälter drains → households run dry (M5 PDA).
+- **Wire/API**: `StepResult.wellfields` (raw SCADA, survives strict mode);
+  recorder `wellfields.csv`; GET /wellfields, POST /wellfield/drought,
+  POST /wellfield/{name}/well/{well}/regenerate (61 routes). Compliance:
+  `water_right` (day warn / year violation — COMPLIANCE, wells keep
+  pumping), `well_ageing` (W 130 > 10 %). Scenario recipes carry the
+  drought factor. UI WellFieldSection (aquifer, production/capacity,
+  energy, water right, per-well ageing + regenerate, drought slider).
+- **Bundle**: NEW **lauenau** (8 nodes, modelled on the real 2020 water
+  emergency — Reinwasserbehälter → Netzpumpe → Hochbehälter → village; two
+  14 m³/h wells; a deliberately small "shallow teaching aquifer" so the
+  drought decline is visible over the sim's fast-forward days, TF §5).
+
+**Tests: 203 backend ×2 + 23 vitest**; tsc + vite build green; API.md
+61 routes. Acceptance: Lauenau normal day supplied at 0.385 kWh/m³ (in the
+0.3–1.0 corridor); the drought cascade leaves households unsupplied; the
+seasonal aquifer sawtooth, well ageing/regeneration, filter-screen
+protection (the aquifer cannot fall below screen+margin — the well stops
+first), break-tank mass balance, and the water-right compliance warning
+all pinned.
+
+**Review note:** the adversarial-review workflow was blocked by an
+Anthropic session limit (all three find-agents errored before running), so
+I did a rigorous MANUAL review pass via direct probes instead — which
+found two real defects, both fixed + regression-pinned: (1) the well-pump
+hysteresis memory (`pumps_running`) was a dynamically-added attribute never
+reset, breaking deterministic replay / live-vs-export byte-compat; (2) the
+`interference_fraction` parameter was stored but never applied (dead
+Sichardt physics). The automated multi-agent review is queued to re-run
+once the limit resets; any further findings will land as a follow-up.
+
+**Deviation (documented):** an export replay resets the raw side (aquifer
+level, ageing, counters) — a mid-session day exports from the full
+aquifer, so its `wellfields.csv` differs from a warm live pack (the
+from-midnight-replay doctrine, like the M4/M5 caveats; noted in
+`exporter.py` + `docs/COMPLIANCE.md`). The storativity is a small teaching
+value (real aquifers respond over months, TF §5).
+
+- Next: **M7 — observability** (roadmap §6, §4.10): SCADA-realistic sensor
+  presets, the measured/estimated views wired to water channels, the
+  ForwardObserver water twin with archetype demand priors, honesty
+  tripwire tests (a burst at an unmetered node must NOT appear in the
+  estimate).

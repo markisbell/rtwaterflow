@@ -257,6 +257,25 @@ const de = {
       "Löschreserve liegt direkt über dem Mindeststand.",
   },
 
+  well: {
+    heading: "Brunnenfeld & Grundwasser",
+    drought: "Dürre (Grundwasserneubildung)",
+    droughtTitle:
+      "Skaliert die Grundwasserneubildung: unter 1,0 sinkt der " +
+      "Grundwasserstand, die Brunnenergiebigkeit fällt (Lauenau)",
+    aquifer: "Grundwasserstand",
+    production: "Förderung",
+    energy: "Energiebedarf",
+    right: "Wasserrecht",
+    rightExceeded: "Entnahme über dem Wasserrecht (WHG §§8–10)",
+    aged: "{{p}} % gealtert",
+    regenerateTitle: "Brunnen regenerieren (W 130) — ~90 % wiederherstellen",
+    hint:
+      "Rohwasserseite (Brunnen → Reinwasserbehälter → Netzpumpe). Sinkt " +
+      "die Förderung unter den Spitzenbedarf, läuft der Behälter leer und " +
+      "Haushalte fallen trocken.",
+  },
+
   event: {
     heading: "Störungen & Ereignisse",
     pda: "Druckabhängiger Bedarf",
@@ -628,6 +647,25 @@ const en: typeof de = {
       "Pumps start below the on-level and stop above the off-level " +
       "(two-point control, DVGW W 300-1). The fire reserve sits right " +
       "above the minimum level.",
+  },
+
+  well: {
+    heading: "Well field & groundwater",
+    drought: "Drought (recharge)",
+    droughtTitle:
+      "Scales groundwater recharge: below 1.0 the aquifer level falls and " +
+      "the well yield drops (the Lauenau mechanism)",
+    aquifer: "Groundwater level",
+    production: "Production",
+    energy: "Energy demand",
+    right: "Water right",
+    rightExceeded: "Abstraction over the permit (WHG §§8–10)",
+    aged: "{{p}} % aged",
+    regenerateTitle: "Regenerate the well (W 130) — restore ~90 %",
+    hint:
+      "Raw-water side (wells → clean-water tank → network pump). If " +
+      "production falls below peak demand the tank empties and households " +
+      "run dry.",
   },
 
   event: {

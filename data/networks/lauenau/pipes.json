@@ -1,0 +1,106 @@
+{
+ "pipes": [
+  {
+   "from_node": "pw",
+   "to_node": "hb",
+   "dn": 200,
+   "material": "GGG",
+   "year_laid": 1985,
+   "geometry": [
+    [
+     52.2961,
+     9.3872
+    ],
+    [
+     52.299,
+     9.393
+    ]
+   ]
+  },
+  {
+   "from_node": "hb",
+   "to_node": "d1",
+   "dn": 150,
+   "material": "GGG",
+   "year_laid": 1985,
+   "geometry": [
+    [
+     52.299,
+     9.393
+    ],
+    [
+     52.2985,
+     9.3945
+    ]
+   ]
+  },
+  {
+   "from_node": "d1",
+   "to_node": "d2",
+   "dn": 160,
+   "material": "PE",
+   "year_laid": 2008,
+   "geometry": [
+    [
+     52.2985,
+     9.3945
+    ],
+    [
+     52.298,
+     9.396
+    ]
+   ]
+  },
+  {
+   "from_node": "d2",
+   "to_node": "d3",
+   "dn": 125,
+   "material": "PE",
+   "year_laid": 2008,
+   "geometry": [
+    [
+     52.298,
+     9.396
+    ],
+    [
+     52.2975,
+     9.3975
+    ]
+   ]
+  },
+  {
+   "from_node": "d3",
+   "to_node": "d4",
+   "dn": 125,
+   "material": "PE",
+   "year_laid": 2008,
+   "geometry": [
+    [
+     52.2975,
+     9.3975
+    ],
+    [
+     52.297,
+     9.399
+    ]
+   ]
+  },
+  {
+   "from_node": "d4",
+   "to_node": "d5",
+   "dn": 110,
+   "material": "PE",
+   "year_laid": 2008,
+   "geometry": [
+    [
+     52.297,
+     9.399
+    ],
+    [
+     52.2965,
+     9.4005
+    ]
+   ]
+  }
+ ]
+}

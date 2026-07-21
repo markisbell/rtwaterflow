@@ -15,13 +15,14 @@ from rtwaterflow.api import create_app
 from rtwaterflow.api.runtime import API_VERSION
 
 # ---------------------------------------------------------------------------
-# THE M5 SURFACE (58 routes). Deliberately exhaustive and alphabetical —
+# THE M6 SURFACE (61 routes). Deliberately exhaustive and alphabetical —
 # change the API, change this list, consciously. The fork parent's thermal
 # routes (weather, heatingcurve, dpcontrol, storage, bypass, loadgen,
 # producer CRUD) were removed in M0; M2 added the water asset routes
 # (GET /tanks, GET /stations, POST /station/{name}); M3 added the weather
 # knob (GET/POST /environment); M4 the alarm center (GET /findings); M5 the
-# pressure-dependent hydraulics (emitters + PDA toggle).
+# pressure-dependent hydraulics (emitters + PDA toggle); M6 the raw-water
+# side (GET /wellfields, POST /wellfield/drought, well regeneration).
 # ---------------------------------------------------------------------------
 EXPECTED = {
     ("DELETE", "/consumer/{consumer_id}"),
@@ -55,6 +56,7 @@ EXPECTED = {
     ("GET", "/stations"),
     ("GET", "/status"),
     ("GET", "/tanks"),
+    ("GET", "/wellfields"),
     ("POST", "/burst"),
     ("POST", "/config/apply"),
     ("POST", "/consumer"),
@@ -81,6 +83,8 @@ EXPECTED = {
     ("POST", "/scenarios"),
     ("POST", "/scenarios/{sid}/load"),
     ("POST", "/station/{name}"),
+    ("POST", "/wellfield/drought"),
+    ("POST", "/wellfield/{name}/well/{well}/regenerate"),
     ("WS", "/ws"),
 }
 

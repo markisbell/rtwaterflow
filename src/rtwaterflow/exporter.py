@@ -35,6 +35,15 @@ replay restores). Same from-midnight-replay doctrine; live-vs-export
 byte-compat holds only for a run with no live emitters or one driven
 entirely from a scenario recipe.
 
+Raw-water caveat (M6): ``reset_operations`` resets the well fields too —
+the aquifer level, well ageing and abstraction/energy counters return to
+their bundle-initial values. So an export of a MID-SESSION day starts the
+raw side FRESH (full aquifer, un-aged wells) and its ``wellfields.csv``
+differs from a warm live pack that entered the day with a drawn-down
+aquifer. The drought override IS restored by the scenario recipe (config);
+the aquifer state is run-state and intentionally not. Deterministic
+from-midnight replay, same as above.
+
 One export at a time (the API maps a second start to 409); progress is
 polled via ``status()`` (steps done/total, ETA) and a run can be cancelled
 between steps (the partial pack is finalized and marked).

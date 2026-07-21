@@ -23,6 +23,7 @@ from pandapipes import pipeflow
 from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
 
 from .assets.tank import WaterTank
+from .assets.wellfield import Aquifer, Well, WellField
 from .compliance import ComplianceEngine
 from .compliance.engine import P_MIN_EG_BAR
 from .config import Settings, get_settings
@@ -73,6 +74,7 @@ class StepResult:
     producers: list = field(default_factory=list)
     tanks: list = field(default_factory=list)
     emitters: list = field(default_factory=list)   # M5 leaks/hydrants/bursts
+    wellfields: list = field(default_factory=list)  # M6 raw-water side
     controls: dict = field(default_factory=dict)
     # -- observability layers --
     measurements: dict = field(default_factory=dict)
@@ -359,6 +361,43 @@ class Simulator:
                 level_initial_m=float(spec.level_initial_m)))
         self._tanks_by_name = {t.name: t for t in self.tanks}
 
+        # M6 well fields (raw-water side, pure Python): each fills a break
+        # tank; its production is capped by the aquifer. Built here, stepped
+        # pre-solve in _apply_step.
+        self.wellfields: list[WellField] = []
+        for wf in inputs.supply.wellfields:
+            self.wellfields.append(WellField(
+                name=wf.name,
+                wells=[Well(
+                    name=w.name, static_level_m=float(w.static_level_m),
+                    spec_capacity_m3h_per_m=float(w.spec_capacity_m3h_per_m),
+                    screen_top_m=float(w.screen_top_m),
+                    rated_m3_h=float(w.rated_m3_h),
+                    q_s_decay_per_a=float(w.q_s_decay_per_a),
+                    protection_margin_m=float(w.protection_margin_m))
+                    for w in wf.wells],
+                aquifer=Aquifer(
+                    storativity_area_m2=float(wf.aquifer.storativity_area_m2),
+                    level_initial_m=float(wf.aquifer.level_initial_m),
+                    recharge_m3_per_d_mean=float(
+                        wf.aquifer.recharge_m3_per_d_mean)),
+                break_tank_name=wf.break_tank,
+                pump_head_m=float(wf.pump_head_m),
+                efficiency=float(wf.efficiency),
+                right_m3_per_a=wf.water_right.m3_per_a,
+                right_m3_per_d=wf.water_right.m3_per_d,
+                interference_fraction=float(wf.interference_fraction)))
+        # break-tank hysteresis bands + which stations draw from a break tank
+        self._wf_bands = {wf.name: (wf.on_below_m, wf.off_above_m)
+                          for wf in inputs.supply.wellfields}
+        break_nodes = {t.node for t in inputs.supply.tanks
+                       if t.kind == "break"}
+        #: station element -> True if its SUCTION is a break tank (low-level
+        #: pump protection: trip when the Reinwasserbehälter runs empty)
+        self._break_suction_stations = [
+            m for m in self.index.producer_meta
+            if m["kind"] == "station" and m["from_node"] in break_nodes]
+
         # pump stations: hysteresis rules + operator mode overrides
         rules: list[HysteresisRule] = []
         self.station_modes: dict[str, str] = {}
@@ -405,6 +444,7 @@ class Simulator:
         #: absolute (unwrapped) sim tick of the last run_step — the clock
         #: time-limited emitters expire against
         self._abs_tick: int = 0
+        self._cur_day: int = 0            # day of the last run_step (M6)
 
         self._last_payload: dict | None = None  # last converged _collect()
         #: blind-spot flag: true when the observed layer misses the TRUE
@@ -526,6 +566,11 @@ class Simulator:
         # operating rules (hysteresis pump switching + operator overrides);
         # tank levels are station SCADA — always observed (TF §7)
         self.rules.evaluate(self.net, self._tanks_by_name, self.station_modes)
+        # M6 raw-water side: run the well fields (fill the break tanks,
+        # capped by the aquifer) and apply low-level pump protection —
+        # pre-solve, so the break-tank head + the network pump state this
+        # tick reflect the raw supply
+        self._step_wellfields()
         # manual stations without a rule follow their mode directly; their
         # "auto" means the CONFIGURED state (control.running) — without this
         # write nothing ever touches in_service again and a check-valve
@@ -543,6 +588,41 @@ class Simulator:
                     self.net.pump.at[meta["element"], "in_service"] = bool(
                         spec.control.running)
 
+    def _step_wellfields(self) -> None:
+        """Run each well field pre-solve: the well pumps fill the break tank
+        on two-point hysteresis (capped by the aquifer), the aquifer steps,
+        and the network pump drawing FROM a break tank trips when it runs
+        empty (low-level protection — the Lauenau cascade)."""
+        if not self.wellfields:
+            return
+        doy = ((self.inputs.environment.season_day_of_year - 1
+                + self._cur_day) % 365) + 1
+        empty_break_nodes: set[str] = set()
+        for wf in self.wellfields:
+            tank = self._tanks_by_name.get(wf.break_tank_name)
+            if tank is None:
+                continue
+            on_below, off_above = self._wf_bands[wf.name]
+            running = wf.pumps_running
+            if tank.level_m < on_below:
+                running = True
+            elif tank.level_m > off_above:
+                running = False
+            wf.pumps_running = running
+            # when filling, the wells pump flat out (produce() caps at the
+            # aquifer availability); when full, they rest
+            demand_m3_h = 1e6 if running else 0.0
+            inflow = wf.produce(demand_m3_h=demand_m3_h, day=self._cur_day,
+                                day_of_year=doy, dt_s=self._dt_s)
+            tank.external_inflow_kg_per_s = inflow
+            if tank.level_m <= tank.level_min_m + 1e-6:
+                empty_break_nodes.add(tank.node)
+        # low-level pump protection: a network pump whose suction break tank
+        # is empty must not run (it would cavitate) — trip it
+        for meta in self._break_suction_stations:
+            if meta["from_node"] in empty_break_nodes:
+                self.net.pump.at[meta["element"], "in_service"] = False
+
     # -- the step ------------------------------------------------------------
 
     def run_step(self, step: int, day: int) -> StepResult:
@@ -552,6 +632,7 @@ class Simulator:
         # profile ``tick`` wraps modulo the horizon, so a hydrant opened on
         # day 1 would never expire against it (M5 review)
         self._abs_tick = int(day) * self.profiles.steps_per_day + int(step)
+        self._cur_day = int(day)
         apply_error: str | None = None
         try:
             self._apply_step(tick)
@@ -831,8 +912,8 @@ class Simulator:
         """Last converged physics (or empty shells) + live controls."""
         payload = dict(self._last_payload) if self._last_payload else {
             "junctions": [], "pipes": [], "consumers": [],
-            "producers": [], "tanks": [], "emitters": [], "summary": {},
-            "findings": [],
+            "producers": [], "tanks": [], "emitters": [], "wellfields": [],
+            "summary": {}, "findings": [],
         }
         payload["controls"] = self._controls_dict()
         return payload
@@ -966,6 +1047,30 @@ class Simulator:
     def remove_emitter(self, name: str) -> bool:
         return self.emitters.remove(name)
 
+    # -- M6 raw-water side (wells / aquifer) ---------------------------------
+
+    def set_drought(self, factor: float) -> dict:
+        """Set the recharge drought factor on every aquifer (1.0 = normal,
+        0 = no recharge). Config (scenario-saved); the aquifer level then
+        declines under abstraction, capping well production (Lauenau)."""
+        f = max(0.0, float(factor))
+        for wf in self.wellfields:
+            wf.aquifer.drought_factor = f
+        return {"drought_factor": f,
+                "wellfields": [wf.name for wf in self.wellfields]}
+
+    def regenerate_well(self, wellfield: str, well: str) -> dict:
+        """Well regeneration (W 130): restore ~90 % of the nameplate Q/s."""
+        wf = next((w for w in self.wellfields if w.name == wellfield), None)
+        if wf is None:
+            raise KeyError(f"unknown well field {wellfield!r}")
+        w = next((x for x in wf.wells if x.name == well), None)
+        if w is None:
+            raise KeyError(f"unknown well {well!r} in {wellfield!r}")
+        w.regenerate()
+        return {"wellfield": wellfield, "well": well,
+                "spec_capacity_now": round(w.spec_capacity_now, 3)}
+
     def clear_leakage(self) -> int:
         names = [n for n, e in self.emitters.emitters.items()
                  if e.kind == "leak"]
@@ -1008,6 +1113,14 @@ class Simulator:
         # its own emitter actions afterwards
         self.emitters.clear()
         self.leak_coefficient_per_km = 0.0
+        # M6 raw side back to its initial point (aquifer level, well ageing,
+        # abstraction/energy counters) — the drought override is config,
+        # restored by the scenario recipe
+        for wf in self.wellfields:
+            wf.reset()
+            tank = self._tanks_by_name.get(wf.break_tank_name)
+            if tank is not None:
+                tank.external_inflow_kg_per_s = 0.0
         if len(self.index.consumers):
             self.net.sink.loc[self.index.consumers, "scaling"] = 1.0
 
@@ -1097,6 +1210,9 @@ class Simulator:
             # equipment, kept on the wire in strict mode (an operator sees
             # an open hydrant / a reported burst)
             "emitters": [e.payload() for e in self.emitters.emitters.values()],
+            # M6 well fields — raw-side SCADA (aquifer level, production,
+            # water right, energy); station equipment, visible in strict mode
+            "wellfields": [wf.payload() for wf in self.wellfields],
             "summary": physics["summary"],
             "controls": self._controls_dict(),
         }

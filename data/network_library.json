@@ -24,6 +24,14 @@
    "nodes": 8,
    "pipe_km": 0.856,
    "dir": "networks/mustertal"
+  },
+  {
+   "id": "lauenau",
+   "name": "Lauenau (Brunnenfeld)",
+   "character": "rural",
+   "nodes": 8,
+   "pipe_km": 1.09,
+   "dir": "networks/lauenau"
   }
  ]
 }
