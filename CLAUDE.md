@@ -433,7 +433,68 @@ normalization doctrine, topology Anschlusswert, tooltip XSS, empty-size
 and doy-366 contract holes, dryness-null docstring, hot-state derivation,
 poll race, ρ-1000 stragglers, errstate, warm-solve re-pin.
 
-- Next: **M4 — compliance engine + alarms** (roadmap §6, §4.9): typed
-  findings with German rule citations (W 400-1 storey pressures, > 8 bar
-  rest, velocity/stagnation, tank reserves/turnover, W 405 fire checks),
-  alarm center + traffic-light overlay, seeded violation fixtures.
+### 2026-07-21 — M4: compliance engine + alarm center (branch `m0-fork-strip`)
+
+**Built** (roadmap §6 M4, §4.9; rule values from TF §2/§4):
+
+- **compliance/ package**: post-solve rule pass on the collected wire
+  payload emitting typed findings `{severity, rule, check, entity_kind,
+  entity, value, threshold, since_ticks, text_de}` — each with a German
+  DVGW citation (`docs/COMPLIANCE.md` maps every check). Checks: `p_min`
+  (W 400-1 2.0 + 0.35/storey; ≤ 0.5 bar AND < 1 h = warning band, else
+  violation; per-consumer sustained counters), `p_rest` (8 bar Ruhedruck
+  warning SCOPED to consumer junctions, 10 bar PN-10 violation on all
+  junctions), `v_max` (> 2.0: warning momentary / violation ≥ 1 h),
+  `stagnation` (per-pipe hour-mean < 5 mm/s hygiene warning, skipped on
+  off-station riser feet; daily self-cleaning AGGREGATED into one fleet
+  finding), `tank_reserve`/`tank_empty`/`tank_overflow`, `tank_turnover`
+  (day-mean volume / day-mean |exchange| > 24 h), `solver` (degraded =
+  info). Rolling state (per-pipe |v| ring + counters, per-consumer below
+  counters, per-tank flow/volume rings); `reset()` on replay.
+- **Wire**: `StepResult.findings` is a TRUTH key (`_TRUTH_KEYS` → 5;
+  strict mode strips it). `GET /findings` (50 routes) serves findings +
+  severity counts + `truth_hidden` + `converged`/`solver_status`
+  staleness. Compliance runs in its OWN try/except after `_collect` (a
+  poisoned check degrades to a system info finding, never discards the
+  converged frame). `findings.csv` in every recording.
+- **UI**: AlarmSection (grouped by severity, rule citations, 🔴/🟡
+  badges; measured-view + strict-mode + non-converged honesty — never a
+  fake ✅); MapDiagram red/amber alarm halos (diffed decorative rings,
+  suppressed in the measured view); i18n `alarm.*` DE/EN.
+
+**Tests: 171 backend ×2 + 23 vitest**; tsc strict + vite build green;
+API.md regenerated (50 routes). Seeded fixtures each produce exactly
+their finding: undersized DN50 branch + 4.5 kg/s → one `v_max` violation;
+source at 4.0/5.5 bar → `p_rest` warning/violation; dead-end stub →
+`stagnation`; 8-storey consumers → warning band then sustained violation;
+drained Hochbehälter → `tank_reserve` + `tank_empty`.
+
+**Adversarial review** (3 lenses + per-finding verification, 26 agents):
+22 confirmed / 1 refuted — all fixed + regression-pinned before commit.
+The two headline fixes: (1) **alarm flood** — the healthy showcase net
+emitted ~28 identical per-pipe stagnation ambers per tick (fire-capable
+rural sizing → most branches under 0.3 m/s daily); now ONE aggregated
+self-cleaning finding + off-station-riser exemption → ≤ 6 findings/tick,
+so seeded anomalies stand out. (2) **p_rest false positive** — the
+Pumpwerk discharge node `ws` (~8.6 bar while pumping, by construction)
+carried a permanent uncancellable Ruhedruck warning; the 8-bar band is
+now scoped to consumer junctions (a riser is transport infrastructure, not
+a house connection). Plus: runtime-added consumers now registered for the
+p_min check (were silently exempt), duplicate consumer names rejected
+(merged sustained counters), tank_turnover on |exchange| not net draw (a
+Durchlauf tank flapped), ceil ticks-per-hour, compliance-exception guard,
+/findings staleness, measured-view honesty, aggregated-vs-per-pipe pins,
+German decimal separators, language-toggle halo restyle.
+
+**Deviation (documented):** an export replay of a mid-session day starts
+its rolling windows COLD, so its `findings.csv` differs from a warm live
+pack of the same day (the export is a deterministic from-midnight replay —
+noted in `docs/COMPLIANCE.md` + the exporter docstring). Fire-flow checks
+at hydrants, loss KPIs, water-right and surge advisories are deferred to
+their milestones (M5/M6/M9).
+
+- Next: **M5 — PDA, emitters, scenario library** (roadmap §6, §4.3/§4.4):
+  Wagner pressure-driven demand (undersupply → dry taps, not negative
+  pressures), emitter controller (leaks/hydrants/bursts C·√p), and the
+  scenario recipes (fire test, burst, leakage + MNF, pump failure, heat
+  wave, drought cap).

@@ -32,8 +32,9 @@ log = logging.getLogger(__name__)
 
 # Ground-truth layer of the StepResult wire format (SPEC §6): stripped by
 # _project() in strict mode. Equipment, weather, controls and the
-# observability layers stay visible.
-_TRUTH_KEYS = ("junctions", "pipes", "consumers", "summary")
+# observability layers stay visible. findings (M4) derive from the truth
+# layer — an observed-layer alarm view arrives with the M7 observer.
+_TRUTH_KEYS = ("junctions", "pipes", "consumers", "summary", "findings")
 
 
 class StateStore:

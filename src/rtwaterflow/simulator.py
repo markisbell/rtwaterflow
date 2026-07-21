@@ -23,6 +23,7 @@ from pandapipes import pipeflow
 from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
 
 from .assets.tank import WaterTank
+from .compliance import ComplianceEngine
 from .config import Settings, get_settings
 from .control.rules import HysteresisRule, RuleEngine
 from .estimator import EstimationConfig, ForwardObserver
@@ -58,6 +59,9 @@ class StepResult:
     pipes: list = field(default_factory=list)
     consumers: list = field(default_factory=list)
     summary: dict = field(default_factory=dict)
+    #: M4 compliance findings — derived FROM the truth layer, so strict
+    #: mode strips them too (the observed-layer alarm view is M7)
+    findings: list = field(default_factory=list)
     # -- supply/equipment (always visible) --
     producers: list = field(default_factory=list)
     tanks: list = field(default_factory=list)
@@ -357,6 +361,11 @@ class Simulator:
         #: (transient, re-decided every solve — see _solve_step)
         self.cv_closed: set[str] = set()
 
+        #: M4 compliance engine — the post-solve rule pass with rolling
+        #: sustained/stagnation state
+        self.compliance = ComplianceEngine(
+            inputs, self.index, self.settings.steps_per_day)
+
         self._last_payload: dict | None = None  # last converged _collect()
         #: blind-spot flag: true when the observed layer misses the TRUE
         #: min-pressure worst point — either no usable pressure reading at
@@ -510,6 +519,23 @@ class Simulator:
                 for tank in self.tanks:
                     tank.integrate(self.net, self._dt_s)
                 payload = self._collect(tick)
+                # M4 compliance pass on the collected wire values — in its
+                # OWN guard: a poisoned rule check must degrade to an
+                # honest system finding, never discard a converged frame
+                # (M4 review: the shared except desynced tank state)
+                try:
+                    payload["findings"] = self.compliance.evaluate(
+                        payload, outcome.status, outcome.error)
+                except Exception:
+                    log.exception("compliance pass failed")
+                    payload["findings"] = [{
+                        "severity": "info", "rule": "Modellhinweis",
+                        "check": "solver", "entity_kind": "system",
+                        "entity": "compliance", "value": None,
+                        "threshold": None, "since_ticks": 0,
+                        "text_de": "Regelwerksprüfung ausgefallen — "
+                                   "keine Meldungen für diesen Schritt",
+                    }]
                 self._last_payload = payload
             except Exception as exc:
                 log.exception("result collection failed")
@@ -673,7 +699,7 @@ class Simulator:
         """Last converged physics (or empty shells) + live controls."""
         payload = dict(self._last_payload) if self._last_payload else {
             "junctions": [], "pipes": [], "consumers": [],
-            "producers": [], "tanks": [], "summary": {},
+            "producers": [], "tanks": [], "summary": {}, "findings": [],
         }
         payload["controls"] = self._controls_dict()
         return payload
@@ -748,6 +774,8 @@ class Simulator:
                 or self.environment.dryness_override is not None):
             self.environment = EnvironmentState()
             self._rebuild_demand_profiles()
+        # compliance rolling state fresh (sustained/stagnation windows)
+        self.compliance.reset()
 
     # -- derived quantities & wire payload -------------------------------------
 
@@ -886,6 +914,13 @@ class Simulator:
                 f"node {node!r} is a head source (tank/ext_grid) — "
                 "consumers must attach to network nodes")
         name = name or f"consumer_{node}_{len(idx.consumers)}"
+        # duplicate names are load-bearing keys (compliance counters,
+        # profile identity rebuild, scenario meter replay) — reject
+        # BEFORE the sink exists (no orphaned element on error)
+        if name in idx.consumer_names:
+            raise KeyError(
+                f"consumer name {name!r} already exists — names must be "
+                "unique")
         mdot = float(mdot_kg_per_s)
         sk = pp.create_sink(self.net, junction=jj, mdot_kg_per_s=mdot,
                             name=name)
@@ -893,6 +928,9 @@ class Simulator:
         idx.consumer_names.append(name)
         idx.consumer_nodes.append(node)
         idx.consumer_kinds.append("consumer")
+        # M4: runtime consumers get the EG minimum-pressure requirement —
+        # never silently exempt from the W 400-1 check (review)
+        self.compliance.register_consumer(name, node, storeys=1)
         p.mdot_kg_per_s = np.vstack(
             [p.mdot_kg_per_s, np.full((1, p.steps), mdot)])
         self.consumer_ops.append({
@@ -932,6 +970,8 @@ class Simulator:
         if idx.consumer_kinds:
             del idx.consumer_kinds[pos]
         p.mdot_kg_per_s = np.delete(p.mdot_kg_per_s, pos, axis=0)
+        # compliance requirement + sustained counter go with the consumer
+        self.compliance.unregister_consumer(name)
         # a removed consumer takes its meter with it
         self.measurements.prune({int(c) for c in idx.consumers})
         self.consumer_ops.append({"op": "remove_consumer", "name": name})

@@ -26,6 +26,7 @@ from ..recorder import Recorder
 from ..simulator import Simulator
 from ..state import StateStore
 from . import (
+    compliance,
     consumers,
     control,
     core,
@@ -127,6 +128,7 @@ def create_app(settings: Settings | None = None,
     fastapi_app.include_router(control.router)
     fastapi_app.include_router(producers.router)
     fastapi_app.include_router(environment.router)
+    fastapi_app.include_router(compliance.router)
     fastapi_app.include_router(consumers.router)
     fastapi_app.include_router(measurements.router)
     fastapi_app.include_router(networks.router)

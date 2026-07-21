@@ -257,6 +257,21 @@ const de = {
       "Löschreserve liegt direkt über dem Mindeststand.",
   },
 
+  alarm: {
+    heading: "Meldungen (Regelwerk)",
+    allClear: "keine Regelverletzungen — alles im grünen Bereich",
+    truthHidden:
+      "Strict Mode: Regelprüfungen basieren auf der (verborgenen) " +
+      "Realität — die Messsicht-Alarme folgen mit dem Beobachter (M7).",
+    measuredHidden:
+      "Messsicht: die Regelprüfungen basieren auf der Realitätsschicht " +
+      "und werden hier nicht angezeigt — Alarme aus Messwerten folgen " +
+      "mit dem Beobachter (M7).",
+    hint:
+      "Jede Meldung zitiert ihre Regel (DVGW W 400-1, W 405, W 300-1). " +
+      "Vollständige Zuordnung: docs/COMPLIANCE.md.",
+  },
+
   env: {
     heading: "Umwelt & Wetter",
     tAir: "Lufttemperatur",
@@ -587,6 +602,21 @@ const en: typeof de = {
       "Pumps start below the on-level and stop above the off-level " +
       "(two-point control, DVGW W 300-1). The fire reserve sits right " +
       "above the minimum level.",
+  },
+
+  alarm: {
+    heading: "Alarms (rules)",
+    allClear: "no rule violations — all green",
+    truthHidden:
+      "Strict mode: rule checks derive from the (hidden) ground truth — " +
+      "measured-view alarms arrive with the observer (M7).",
+    measuredHidden:
+      "Measured view: rule checks derive from the reality layer and are " +
+      "not shown here — measurement-based alarms arrive with the " +
+      "observer (M7).",
+    hint:
+      "Every alarm cites its rule (DVGW W 400-1, W 405, W 300-1). " +
+      "Full mapping: docs/COMPLIANCE.md.",
   },
 
   env: {

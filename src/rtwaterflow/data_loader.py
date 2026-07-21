@@ -99,6 +99,14 @@ def cross_validate(inputs: NetInputs) -> None:
                 errors.append(f"pipe {p.from_node}->{p.to_node}: unknown node {ref!r}")
     head_source_nodes = ({s.node for s in inputs.supply.supplies}
                          | {t.node for t in inputs.supply.tanks})
+    # consumer names are load-bearing keys (compliance counters, profile
+    # identity, meter replay) — duplicates silently merged state (M4 review)
+    cnames = [c.name or f"consumer_{c.node}" for c in inputs.consumers.consumers]
+    cdupes = {n for n in cnames if cnames.count(n) > 1}
+    if cdupes:
+        errors.append(
+            f"duplicate consumer name(s) {sorted(cdupes)} — names must be "
+            "unique (they key compliance counters and meter replay)")
     for c in inputs.consumers.consumers:
         if c.node not in nodes:
             errors.append(f"consumer {c.name or c.node!r}: unknown node {c.node!r}")

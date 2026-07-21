@@ -18,6 +18,14 @@ copy is normalized to a **from-midnight replay** by
 :meth:`BulkExporter.prepare_replay` — the same convention a fresh scenario
 load produces (cold initialization, fresh measurement windows).
 
+Cold-start alarm caveat (M4): ``prepare_replay`` resets the compliance
+engine's rolling windows too, so an export of a MID-SESSION day starts its
+sustained/stagnation/turnover clocks from zero — its ``findings.csv`` for
+that day therefore differs from a live pack that entered the day with warm
+history. This is deliberate (the export is a deterministic from-midnight
+replay, not a snapshot of a warm live state); it is called out in
+``docs/COMPLIANCE.md``.
+
 One export at a time (the API maps a second start to 409); progress is
 polled via ``status()`` (steps done/total, ETA) and a run can be cancelled
 between steps (the partial pack is finalized and marked).

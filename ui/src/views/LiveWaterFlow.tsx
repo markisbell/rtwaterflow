@@ -9,6 +9,7 @@ import type {
 import { useStepStream } from "../useStepStream";
 import MapDiagram from "../components/MapDiagram";
 import OverviewSection from "../components/OverviewSection";
+import AlarmSection from "../components/AlarmSection";
 import WorstPointSection from "../components/WorstPointSection";
 import TankSection from "../components/TankSection";
 import EnvironmentSection from "../components/EnvironmentSection";
@@ -37,6 +38,7 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
   const { layer, viewMode } = view;
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [ovOpen, setOvOpen] = useState(true);
+  const [alOpen, setAlOpen] = useState(true);
   const [wpOpen, setWpOpen] = useState(true);
   const [tkOpen, setTkOpen] = useState(true);
   const [envOpen, setEnvOpen] = useState(true);
@@ -157,7 +159,10 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
     : viewMode === "est" && !est ? (canReveal ? "truth" : "observed")
     : viewMode;
   // est mode splices the estimated arrays over the live frame — the same
-  // MapDiagram/OverviewSection render it (blueprint splice pattern)
+  // MapDiagram/OverviewSection render it (blueprint splice pattern).
+  // NB findings are NOT spliced: they derive from truth — when est mode
+  // goes live (M7), re-derive them on the twin payload or strip them
+  // here (M4 review note).
   const frame = mode === "est" && latest && est
     ? { ...latest, junctions: est.junctions, pipes: est.pipes,
         consumers: est.consumers, summary: est.summary }
@@ -233,6 +238,9 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
                          solveMs={latest?.solve_ms ?? null}
                          canReveal={canReveal}
                          est={est} estAgeMin={estAgeMin} />
+
+        <AlarmSection open={alOpen} onToggle={() => setAlOpen((v) => !v)}
+                      latest={latest} observedOnly={mode === "observed"} />
 
         <WorstPointSection open={wpOpen} onToggle={() => setWpOpen((v) => !v)}
                            latest={latest} trace={pTrace} />

@@ -72,6 +72,9 @@ _ELEMENT_FILES = (
       "volume_m3", "capacity_m3", "fire_reserve_m3", "p_bar",
       "mdot_kg_per_s", "mdot_spill_kg_per_s", "buffer_time_h",
       "overflow", "empty", "fire_reserve_breached")),
+    ("findings", "findings.csv",
+     ("severity", "rule", "check", "entity_kind", "entity", "value",
+      "threshold", "since_ticks", "text_de")),
 )
 # the Gemessen layer (measurements.consumers / measurements.nodes lists)
 _MEAS_FILES = (

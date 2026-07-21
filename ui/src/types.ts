@@ -206,6 +206,19 @@ export interface StationInfo {
   curve: [number, number][]; // [[m³/h, bar lift], ...]
 }
 
+/** One M4 compliance finding (German rule citation on the wire). */
+export interface Finding {
+  severity: "info" | "warning" | "violation";
+  rule: string;
+  check: string;
+  entity_kind: "consumer" | "node" | "pipe" | "tank" | "system";
+  entity: string;
+  value: number | null;
+  threshold: number | null;
+  since_ticks: number;
+  text_de: string;
+}
+
 export interface StepSummary {
   p_min_bar: number | null;
   worst_consumer: string | null;
@@ -328,6 +341,8 @@ export interface StepResult {
   pipes?: PipeState[];
   consumers?: ConsumerState[];
   summary?: StepSummary;
+  /** M4 compliance findings — truth-derived, absent in strict mode. */
+  findings?: Finding[];
   producers: ProducerState[];
   /** Tank states — station SCADA, present in strict mode too. */
   tanks: TankState[];

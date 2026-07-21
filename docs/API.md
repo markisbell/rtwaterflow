@@ -75,6 +75,14 @@ limits · `500` internal failures only —
 - **`GET /environment`** — Bundle environment drivers and the active runtime overrides.
 - **`POST /environment`** — Apply runtime weather overrides (Hitzetag: ``t_offset_c`` + ``dryness`` 1.0). The demand engine rebuilds the archetype profiles from the next tick; legacy demand_factor bundles only shift their displayed temperature.
 
+## compliance
+
+| Method | Path | Summary |
+|---|---|---|
+| `GET` | `/findings` | Compliance findings (alarm center) |
+
+- **`GET /findings`** — Current findings with severity counts. Every finding cites its rule (DVGW W 400-1 / W 405 / W 300-1 — docs/COMPLIANCE.md maps the checks).
+
 ## consumers
 
 | Method | Path | Summary |

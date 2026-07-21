@@ -86,6 +86,7 @@ export default function MapDiagram({
   const prvRef = useRef<Map<number, L.CircleMarker>>(new Map());
   const stationRef = useRef<Map<number, L.CircleMarker>>(new Map());
   const tankRef = useRef<Map<number, L.CircleMarker>>(new Map());
+  const alarmRef = useRef<Map<string, L.CircleMarker>>(new Map());
   const plantRef = useRef<L.CircleMarker | null>(null);
   const [light, setLight] = useState(true);
 
@@ -473,6 +474,7 @@ export default function MapDiagram({
       prvRef.current.clear();
       stationRef.current.clear();
       tankRef.current.clear();
+      alarmRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topo, i18n.language]); // rebuild (incl. tooltips) on language change
@@ -670,8 +672,61 @@ export default function MapDiagram({
     if (plantRef.current?.isPopupOpen()) {
       plantRef.current.setPopupContent(plantPopup());
     }
+
+    // M4 traffic-light overlay: alarm halos on affected entities, diffed
+    // per frame (violation red / warning amber ring, decorative). In the
+    // measured view findings are truth-derived — no halos (M4 review).
+    const map = mapRef.current;
+    if (map) {
+      const nodeGeo = new Map(topo.nodes.map((n) => [n.name, n.geo]));
+      const consNode = new Map(topo.consumers.map((c) => [c.name, c.node]));
+      const tankNode = new Map(topo.producers
+        .filter((p) => p.kind === "tank").map((p) => [p.name, p.node]));
+      const want = new Map<string, { pos: [number, number]; color: string }>();
+      for (const fd of (observedOnly ? [] : f?.findings ?? [])) {
+        if (fd.severity === "info") continue;
+        const color = fd.severity === "violation" ? "#ef4444" : "#f2ae00";
+        let pos: [number, number] | undefined;
+        if (fd.entity_kind === "consumer") {
+          pos = nodeGeo.get(consNode.get(fd.entity) ?? "");
+        } else if (fd.entity_kind === "node") {
+          pos = nodeGeo.get(fd.entity);
+        } else if (fd.entity_kind === "tank") {
+          pos = nodeGeo.get(tankNode.get(fd.entity) ?? "");
+        } else if (fd.entity_kind === "pipe") {
+          const pl = trenchRef.current.get(Number(fd.entity));
+          const c = pl?.getCenter();
+          if (c) pos = [c.lat, c.lng];
+        }
+        if (pos) {
+          const key = `${fd.entity_kind}:${fd.entity}`;
+          const prev = want.get(key);
+          if (!prev || color === "#ef4444") want.set(key, { pos, color });
+        }
+      }
+      for (const [key, mk] of alarmRef.current) {
+        if (!want.has(key)) {
+          map.removeLayer(mk);
+          alarmRef.current.delete(key);
+        }
+      }
+      for (const [key, w] of want) {
+        const existing = alarmRef.current.get(key);
+        if (existing) {
+          existing.setStyle({ color: w.color });
+        } else {
+          alarmRef.current.set(key, L.circleMarker(w.pos, {
+            radius: 12, color: w.color, weight: 2.5, fill: false,
+            opacity: 0.9, interactive: false,
+          }).addTo(map));
+        }
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latest, layer, observedOnly, topo]);
+  }, [latest, layer, observedOnly, topo, i18n.language]);
+  // i18n.language: the language toggle rebuilds every layer (tooltips) —
+  // without re-running the restyle pass the fresh layers would sit
+  // unstyled until the next WS frame (blank while paused — M4 review)
 
   // ---- colorbar legend per layer ----------------------------------------------
 
