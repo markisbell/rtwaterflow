@@ -62,29 +62,39 @@ def _read_json(path: Path) -> dict:
         return json.load(fh)
 
 
+def load_network_from_docs(docs: dict) -> NetInputs:
+    """Validate + cross-validate an in-memory five-file bundle (the same
+    contract as :func:`load_network`, no disk I/O). Keys: ``network_structure
+    / pipes / consumers / supply / environment``. Used by the M8 editor's
+    load-case check on the network it is building."""
+    try:
+        structure = NetworkStructure.model_validate(docs["network_structure"])
+        pipes = PipesFile.model_validate(docs["pipes"])
+        consumers = ConsumersFile.model_validate(docs["consumers"])
+        supply = SupplyFile.model_validate(docs["supply"])
+        environment = EnvironmentFile.model_validate(docs["environment"])
+    except KeyError as exc:
+        raise DataContractError([f"missing bundle document: {exc.args[0]}"])
+    inputs = NetInputs(
+        name=structure.name, structure=structure, pipes=pipes,
+        consumers=consumers, supply=supply, environment=environment)
+    cross_validate(inputs)
+    return inputs
+
+
 def load_network(directory: str | Path) -> NetInputs:
     """Load the five files from *directory*, validate, cross-validate."""
     d = Path(directory)
     missing = [n for n in FILE_NAMES.values() if not (d / n).is_file()]
     if missing:
         raise DataContractError([f"missing file(s) in {d}: {missing}"])
-
-    structure = NetworkStructure.model_validate(_read_json(d / FILE_NAMES["structure"]))
-    pipes = PipesFile.model_validate(_read_json(d / FILE_NAMES["pipes"]))
-    consumers = ConsumersFile.model_validate(_read_json(d / FILE_NAMES["consumers"]))
-    supply = SupplyFile.model_validate(_read_json(d / FILE_NAMES["supply"]))
-    environment = EnvironmentFile.model_validate(_read_json(d / FILE_NAMES["environment"]))
-
-    inputs = NetInputs(
-        name=structure.name,
-        structure=structure,
-        pipes=pipes,
-        consumers=consumers,
-        supply=supply,
-        environment=environment,
-    )
-    cross_validate(inputs)
-    return inputs
+    return load_network_from_docs({
+        "network_structure": _read_json(d / FILE_NAMES["structure"]),
+        "pipes": _read_json(d / FILE_NAMES["pipes"]),
+        "consumers": _read_json(d / FILE_NAMES["consumers"]),
+        "supply": _read_json(d / FILE_NAMES["supply"]),
+        "environment": _read_json(d / FILE_NAMES["environment"]),
+    })
 
 
 def cross_validate(inputs: NetInputs) -> None:

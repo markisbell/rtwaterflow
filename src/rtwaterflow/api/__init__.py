@@ -30,6 +30,7 @@ from . import (
     consumers,
     control,
     core,
+    editor,
     emitters,
     environment,
     measurements,
@@ -136,6 +137,7 @@ def create_app(settings: Settings | None = None,
     fastapi_app.include_router(consumers.router)
     fastapi_app.include_router(measurements.router)
     fastapi_app.include_router(networks.router)
+    fastapi_app.include_router(editor.router)
     fastapi_app.include_router(scenarios.router)
     fastapi_app.include_router(recordings.router)
     return fastapi_app

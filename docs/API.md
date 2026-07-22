@@ -159,6 +159,20 @@ limits · `500` internal failures only —
 - **`POST /networks/import`** — Import a five-file network bundle into ``data/user_networks/<id>/``. The documents are written to disk and validated by actually loading them through the full five-file contract (pydantic models + cross-validation); a bundle that does not load is removed again (400 — blueprint convention). On success the catalog is rescanned and the network appears in ``GET /networks`` with ``source="user"``.
 - **`GET /networks/{network_id}`** — Net-free preview stats of a catalog network (loads + validates the five-file bundle on first access, cached).
 
+## editor
+
+| Method | Path | Summary |
+|---|---|---|
+| `POST` | `/editor/elevation` | DEM elevation for clicked points |
+| `GET` | `/editor/geocode` | Place-name search (Nominatim) |
+| `POST` | `/editor/loadcheck` | DVGW W 400-1 three-load-case check |
+| `GET` | `/editor/streets` | OSM streets + buildings for a bbox |
+
+- **`POST /editor/elevation`** — Frozen elevation for each point (EU-DEM 25 m via OpenTopoData) — the editor stamps it into the junction at edit time (TF §11).
+- **`GET /editor/geocode`** — Resolve a place name → [{name, lat, lon}] for the map search box.
+- **`POST /editor/loadcheck`** — Run the three W 400-1 sizing load cases (max delivery / peak-hour max day / fire case) on the five-file *bundle* the editor is building. Returns pass/fail per case + the binding quantities. 422 if the bundle does not validate (a structural problem the editor must fix first).
+- **`GET /editor/streets`** — Streets (drawn pipes snap onto them) + building footprints (consumer placement) for the bbox (south, west, north, east). Overpass, cached.
+
 ## scenarios
 
 | Method | Path | Summary |

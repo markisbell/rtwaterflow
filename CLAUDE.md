@@ -797,3 +797,64 @@ relief demonstrates exactly why) comes with stage 2.
   hoehendaten.de elevation, street-snapped pipe drawing, equipment, auto-
   hydrants, live W 400-1 load-case checking, commission-to-bundle) + a hilly
   Bavarian real-town bundle with real Druckzonen.
+
+### 2026-07-22 — M8 stage 2a: NetzStudio editor backend + W 400-1 load cases
+
+Stage 2 (the editor) is itself split. **Stage 2a (this entry): the editor
+BACKEND** — the DVGW W 400-1 three-load-case check (the "commission a
+*passing* network" gate) + the thin OSM/DEM proxy endpoints the interactive
+frontend will call. Stage 2b (the frontend map editor, ported from
+`gridedit`) + stage 2c (a hilly Druckzonen bundle) follow.
+
+**Built** (roadmap §5, TF §2):
+
+- **`loadcases.py`** — `run_load_cases` runs the three W 400-1 sizing load
+  cases and returns pass/fail + the binding quantity per case, evaluated from
+  a warm, steady solved frame's RAW values (deterministic, history-free):
+  **LF1 Maximale Förderung** (peak throughput, stations forced on → velocity
+  ≤ 2,0 m/s), **LF2 Spitzenstunde Maximaltag** (every tap ≥ its storey minimum
+  2,0 + 0,35 bar/Geschoss, ≤ 8 bar rest), **LF3 Löschfall** (a W 405 fire draw
+  — 48/96/192 m³/h by land use — at the hydraulically worst node, ≥ 1,5 bar,
+  v ≤ 2,5). Each verdict requires network-wide physical validity (no node
+  below ~0 bar). Honest, differentiated results: `tutorial_hillside` + `alpen`
+  pass all three; `musterdorf` fails LF3 (its industry zone's 192 m³/h fire is
+  unservable at the worst point) and `lauenau` fails LF2 (two multi-storey
+  taps below their storey requirement) — the real "fire flow / storey pressure
+  sizes the network" insights.
+- **`api/editor.py`** — the editor proxies (raw Overpass / Nominatim /
+  OpenTopoData via httpx, no heavy geo stack in the runtime, disk-cached):
+  `GET /editor/streets` (streets + buildings for a village bbox), `GET
+  /editor/geocode`, `POST /editor/elevation` (frozen DEM per clicked point),
+  `POST /editor/loadcheck` (the load-case gate on the bundle being drawn;
+  422 on an invalid bundle). Commission reuses the existing `POST
+  /networks/import`.
+- **`load_network_from_docs`** — an in-memory five-file validator refactored
+  out of `load_network` (which now delegates to it) so the load-case check
+  validates the edited bundle without disk I/O.
+
+**Tests: 249 backend + 23 vitest**; API.md 65 routes. 12 editor tests (the
+three cases on healthy + stressed nets, the fire/storey fail insights, the
+proxy guards, the 422 path) — the live OSM/DEM proxies are exercised only on
+their offline guards (never the network in CI). httpx added to requirements.
+
+**Review:** the multi-agent adversarial review (2 lenses + verification)
+surfaced **8** findings (6 confirmed + 2 plausible), all fixed: (1, MAJOR) LF2
+looked up the storey `p_req` by NODE while the table is keyed by NAME → it
+silently applied a flat 2,0 bar to every multi-storey tap → keyed by name (and
+this immediately caught lauenau's real LF2 failure); (2, MAJOR) LF3 read its
+verdict off a `converged` frame that could be `degraded`/unphysical and
+inspected only the hydrant node → every case now requires network-wide
+physical validity (no node < ~0 bar); (3, MAJOR) `/editor/loadcheck` 500'd on
+a per-document schema error → now 422 with a problems list (pydantic
+`ValidationError` caught); (4, MAJOR) the global peak tick was clamped into
+day 0 on a multi-day horizon → decomposed via `divmod`; (5) the check ran at
+the app's 1440 resolution (5–14 s) → fixed 96 + fewer warm steps; (6) LF1
+reduces to LF2 on demand-driven/gravity nets → documented in the case detail;
+(7) `/editor/elevation` silently truncated > 100 points → explicit 422;
+(8) the bbox guard gained absolute lat/lon bounds. All pinned by regression
+tests.
+
+- Next: **M8 stage 2b** — the interactive NetzStudio frontend (the map editor
+  itself: place/draw on real streets, live load-check panel, commission) and
+  **stage 2c** — the hilly Bavarian Druckzonen bundle (PRV zone-splitting in
+  the synthesiser).

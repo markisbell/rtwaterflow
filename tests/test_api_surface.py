@@ -85,6 +85,11 @@ EXPECTED = {
     ("POST", "/station/{name}"),
     ("POST", "/wellfield/drought"),
     ("POST", "/wellfield/{name}/well/{well}/regenerate"),
+    # M8 stage 2 — NetzStudio editor backend
+    ("GET", "/editor/streets"),
+    ("GET", "/editor/geocode"),
+    ("POST", "/editor/elevation"),
+    ("POST", "/editor/loadcheck"),
     ("WS", "/ws"),
 }
 
