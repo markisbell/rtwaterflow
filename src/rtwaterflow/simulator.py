@@ -190,6 +190,123 @@ def solve_with_retry(net, iter_base: int = 100) -> SolveOutcome:
     return SolveOutcome(False, "failed", 0, ms, error=err)
 
 
+def solve_hydraulic(net, iter_base: int, producer_meta: list[dict],
+                    cv_closed: set) -> SolveOutcome:
+    """Retry-ladder solve + station operating points + check valves on *net*.
+
+    Shared by the truth path (``Simulator._solve_hydraulic``) and the forward
+    observer's twin (``estimator.py``) — one operating-point solver, never
+    two. *cv_closed* is cleared and repopulated with the names of stations
+    whose check valve shut against reverse flow this tick.
+
+    pandapipes applies pump curves EXPLICITLY per Newton iteration (no dPL/dQ
+    in the Jacobian) — against dominant static head that fixed point diverges
+    into the reverse-bypass sink (see ``StationLiftStdType``). The solver
+    therefore sees a CONSTANT per-station lift, and this outer loop finds the
+    honest curve operating point ``lift = curve(Q(lift))`` by a bracketed
+    secant on ``[0, shutoff]`` — ``g(lift) = curve(Q(lift)) − lift`` is
+    strictly decreasing (StationSpec REJECTS curves whose degree-2 fit is
+    not), so the root is unique; reverse iterates only narrow the bracket from
+    below (max-effort shutoff is tried ONCE per tick). The lift is warm-started
+    tick-to-tick: quasi-steady ticks settle in one solve.
+
+    Check valves (Rückschlagklappen): a station still reversing at shutoff
+    lift closes for the tick (EPANET-style link status; upstream pumps assume
+    zero-lift zero-resistance bypass on reverse flow, which would drain the
+    Hochbehälter backwards through the works). The rules re-enable it next
+    tick, so it retries as soon as heads allow.
+    """
+    cv_closed.clear()
+    stations = [m for m in producer_meta if m["kind"] == "station"]
+    outcome = solve_with_retry(net, iter_base)
+    if not stations:
+        return outcome
+    pump_stds = net["std_types"]["pump"]
+    lo = {m["name"]: 0.0 for m in stations}
+    hi = {m["name"]: pump_stds[m["name"]].shutoff_bar() for m in stations}
+    last: dict[str, tuple[float, float]] = {}   # secant memory (lift, g)
+    # one max-effort (shutoff) try per station per tick — gating on the
+    # BRACKET instead re-fired shutoff after every reverse iterate (a forward
+    # point AT shutoff never shrinks hi), burning the solve budget
+    max_effort_tried = {m["name"]: False for m in stations}
+    for _ in range(MAX_STATION_SOLVES):
+        if not outcome.converged:
+            return outcome
+        settled = True
+        for meta in stations:
+            name, el = meta["name"], int(meta["element"])
+            if not bool(net.pump.at[el, "in_service"]):
+                continue
+            if el not in net.res_pump.index:
+                continue
+            std = pump_stds[name]
+            mdot = float(net.res_pump.at[el, "mdot_from_kg_per_s"])
+            log.debug("station %s: lift=%.4f mdot=%.4f", name,
+                      std.lift_bar, mdot)
+            if mdot < -CV_EPS_KG_PER_S:
+                settled = False
+                # reverse flow = the lift is BELOW the reversal cliff: the
+                # root (if any) lies above — bracket accordingly
+                if std.shutoff_bar() - std.lift_bar < CV_CLOSE_MARGIN_BAR:
+                    # reversing at (essentially) shutoff head: no forward
+                    # operating point exists — the clapper shuts
+                    net.pump.at[el, "in_service"] = False
+                    cv_closed.add(name)
+                else:
+                    lo[name] = max(lo[name], std.lift_bar)
+                    if not max_effort_tried[name]:
+                        # decisive single try: forward at shutoff brackets
+                        # the root, reverse there closes the valve next round
+                        max_effort_tried[name] = True
+                        std.lift_bar = std.shutoff_bar()
+                    else:
+                        std.lift_bar = 0.5 * (lo[name] + hi[name])
+                    last.pop(name, None)
+                continue
+            max_effort_tried[name] = True   # forward point exists
+            q_m3h = max(0.0, mdot) / RHO_KG_M3 * 3600.0
+            g = std.curve_lift_bar(q_m3h) - std.lift_bar
+            if abs(g) <= LIFT_TOL_BAR:
+                continue
+            settled = False
+            if g > 0:                       # root lies above this lift
+                lo[name] = max(lo[name], std.lift_bar)
+            else:
+                hi[name] = min(hi[name], std.lift_bar)
+            # secant only from FORWARD-flow points: the reverse/deadhead
+            # state (q = 0, curve plateau at shutoff) carries no local
+            # gradient — a secant across that cliff leaps wildly
+            prev = last.get(name)
+            nxt = None
+            if (q_m3h > 0.0 and prev is not None
+                    and abs(std.lift_bar - prev[0]) > 1e-9
+                    and abs(g - prev[1]) > 1e-12):
+                nxt = (std.lift_bar
+                       - g * (std.lift_bar - prev[0]) / (g - prev[1]))
+            if nxt is None or not lo[name] < nxt < hi[name]:
+                # local damped step (≤ 1 bar), never a leap across the
+                # bracket — the warm-started lift is trusted to be near the
+                # root; the bracket midpoint is the last resort
+                nxt = std.lift_bar + max(-1.0, min(1.0, g))
+                if not lo[name] < nxt < hi[name]:
+                    nxt = 0.5 * (lo[name] + hi[name])
+            if q_m3h > 0.0:
+                last[name] = (std.lift_bar, g)
+            std.lift_bar = nxt
+        if settled:
+            return outcome
+        outcome = solve_with_retry(net, iter_base)
+    if outcome.converged:
+        # honest degradation: frames carry curve-inconsistent lift
+        log.warning("station operating point not settled after %d solves",
+                    MAX_STATION_SOLVES)
+        return SolveOutcome(
+            True, "degraded", outcome.tier, outcome.solve_ms,
+            error="station operating point not settled after "
+                  f"{MAX_STATION_SOLVES} solves")
+    return outcome
+
+
 # ---------------------------------------------------------------------------
 # Physics collection — shared by the Simulator's truth payload and the
 # forward observer's twin (estimator.py): one set of formulas, never two.
@@ -470,13 +587,14 @@ class Simulator:
         self.measurements = MeasurementSet(
             window_steps=window_steps, context=self._measurement_context)
 
-        # estimation layer: STUBBED in M0 (estimator.py returns no estimate);
-        # the config plumbing survives so the engine re-applies policy across
-        # grid swaps and the UI three-view switcher stays wired.
+        # estimation layer (M7): the forward observer produces the estimated
+        # layer, driven only by measurements + demand priors. The policy is
+        # held on the engine and re-applied across grid swaps; the observer is
+        # built lazily on the first converged frame.
         self.est_config = EstimationConfig()
         self._observer: ForwardObserver | None = None
 
-    # -- estimation layer (stub in M0) ----------------------------------------
+    # -- estimation layer (M7 forward observer) -------------------------------
 
     def set_est_config(self, cfg: EstimationConfig) -> None:
         """Install a new estimation policy; the observer is dropped and
@@ -696,9 +814,9 @@ class Simulator:
             self._reset_initialization()
             payload = self._reused_payload()
 
-        # estimation layer (stub in M0): refresh on converged frames; failed
-        # frames carry the last estimate stale — consistent with the reused
-        # truth/measurement state above.
+        # estimation layer (M7): refresh the forward observer on converged
+        # frames; failed frames carry the last estimate stale — consistent
+        # with the reused truth/measurement state above.
         if outcome.converged:
             estimated = self._maybe_estimate(payload, tick, step, day)
         else:
@@ -797,121 +915,11 @@ class Simulator:
         return outcome
 
     def _solve_hydraulic(self) -> SolveOutcome:
-        """Retry-ladder solve + station operating points + check valves.
-
-        pandapipes applies pump curves EXPLICITLY per Newton iteration (no
-        dPL/dQ in the Jacobian) — against dominant static head that
-        fixed-point diverges into the reverse-bypass sink (see
-        ``StationLiftStdType``). The solver therefore sees a CONSTANT
-        per-station lift, and this outer loop finds the honest curve
-        operating point ``lift = curve(Q(lift))`` by a bracketed secant on
-        ``[0, shutoff]`` — ``g(lift) = curve(Q(lift)) − lift`` is strictly
-        decreasing (StationSpec REJECTS curves whose degree-2 fit is not:
-        models._curve_fit), so the root is unique; reverse iterates only
-        narrow the bracket from below (max-effort shutoff is tried ONCE per
-        tick — the M2 review found re-firing it turned the bisection into
-        one halving per TWO solves on marginally sized pumps). The lift is
-        warm-started tick-to-tick: quasi-steady ticks settle in one solve.
-
-        Check valves (Rückschlagklappen): a station still reversing at
-        shutoff lift closes for the tick (EPANET-style link status; upstream
-        pumps assume zero-lift zero-resistance bypass on reverse flow, which
-        would drain the Hochbehälter backwards through the works). The rules
-        re-enable it next tick, so it retries as soon as heads allow.
-        """
-        self.cv_closed.clear()
-        stations = [m for m in self.index.producer_meta
-                    if m["kind"] == "station"]
-        outcome = solve_with_retry(self.net, self.settings.solver_iter)
-        if not stations:
-            return outcome
-        pump_stds = self.net["std_types"]["pump"]
-        lo = {m["name"]: 0.0 for m in stations}
-        hi = {m["name"]: pump_stds[m["name"]].shutoff_bar() for m in stations}
-        last: dict[str, tuple[float, float]] = {}   # secant memory (lift, g)
-        # one max-effort (shutoff) try per station per tick — gating on the
-        # BRACKET instead (M2 review finding) re-fired shutoff after every
-        # reverse iterate (a forward point AT shutoff never shrinks hi), so
-        # marginally sized pumps burnt half the solve budget re-computing
-        # the identical reverse state and cold starts exhausted the cap
-        max_effort_tried = {m["name"]: False for m in stations}
-        for _ in range(MAX_STATION_SOLVES):
-            if not outcome.converged:
-                return outcome
-            settled = True
-            for meta in stations:
-                name, el = meta["name"], int(meta["element"])
-                if not bool(self.net.pump.at[el, "in_service"]):
-                    continue
-                if el not in self.net.res_pump.index:
-                    continue
-                std = pump_stds[name]
-                mdot = float(self.net.res_pump.at[el, "mdot_from_kg_per_s"])
-                log.debug("station %s: lift=%.4f mdot=%.4f", name,
-                          std.lift_bar, mdot)
-                if mdot < -CV_EPS_KG_PER_S:
-                    settled = False
-                    # reverse flow = the lift is BELOW the reversal cliff:
-                    # the root (if any) lies above — bracket accordingly
-                    if std.shutoff_bar() - std.lift_bar < CV_CLOSE_MARGIN_BAR:
-                        # reversing at (essentially) shutoff head: no
-                        # forward operating point exists — the clapper shuts
-                        self.net.pump.at[el, "in_service"] = False
-                        self.cv_closed.add(name)
-                    else:
-                        lo[name] = max(lo[name], std.lift_bar)
-                        if not max_effort_tried[name]:
-                            # decisive single try: forward at shutoff
-                            # brackets the root, reverse there closes the
-                            # valve next round
-                            max_effort_tried[name] = True
-                            std.lift_bar = std.shutoff_bar()
-                        else:
-                            std.lift_bar = 0.5 * (lo[name] + hi[name])
-                        last.pop(name, None)
-                    continue
-                max_effort_tried[name] = True   # forward point exists
-                q_m3h = max(0.0, mdot) / RHO_KG_M3 * 3600.0
-                g = std.curve_lift_bar(q_m3h) - std.lift_bar
-                if abs(g) <= LIFT_TOL_BAR:
-                    continue
-                settled = False
-                if g > 0:                       # root lies above this lift
-                    lo[name] = max(lo[name], std.lift_bar)
-                else:
-                    hi[name] = min(hi[name], std.lift_bar)
-                # secant only from FORWARD-flow points: the reverse/deadhead
-                # state (q = 0, curve plateau at shutoff) carries no local
-                # gradient — a secant across that cliff leaps wildly
-                prev = last.get(name)
-                nxt = None
-                if (q_m3h > 0.0 and prev is not None
-                        and abs(std.lift_bar - prev[0]) > 1e-9
-                        and abs(g - prev[1]) > 1e-12):
-                    nxt = (std.lift_bar
-                           - g * (std.lift_bar - prev[0]) / (g - prev[1]))
-                if nxt is None or not lo[name] < nxt < hi[name]:
-                    # local damped step (≤ 1 bar), never a leap across the
-                    # bracket — the warm-started lift is trusted to be near
-                    # the root; the bracket midpoint is the last resort
-                    nxt = std.lift_bar + max(-1.0, min(1.0, g))
-                    if not lo[name] < nxt < hi[name]:
-                        nxt = 0.5 * (lo[name] + hi[name])
-                if q_m3h > 0.0:
-                    last[name] = (std.lift_bar, g)
-                std.lift_bar = nxt
-            if settled:
-                return outcome
-            outcome = solve_with_retry(self.net, self.settings.solver_iter)
-        if outcome.converged:
-            # honest degradation: frames carry curve-inconsistent lift
-            log.warning("station operating point not settled after %d solves",
-                        MAX_STATION_SOLVES)
-            return SolveOutcome(
-                True, "degraded", outcome.tier, outcome.solve_ms,
-                error="station operating point not settled after "
-                      f"{MAX_STATION_SOLVES} solves")
-        return outcome
+        """Thin wrapper over the shared :func:`solve_hydraulic` operating-
+        point solver, bound to this simulator's net + station index + the
+        per-tick ``cv_closed`` set."""
+        return solve_hydraulic(self.net, self.settings.solver_iter,
+                               self.index.producer_meta, self.cv_closed)
 
     def _reset_initialization(self) -> None:
         """After swaps/failures: build-time pressures (pn_bar only)."""

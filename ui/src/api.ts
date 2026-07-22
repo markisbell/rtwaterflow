@@ -132,7 +132,7 @@ export const api = {
   setMeasurementPreset: (preset: MeterPreset) =>
     post<MeasurementsResponse>("/measurements/preset", { preset }),
 
-  // ---- estimation policy (stub in M0) ----
+  // ---- estimation policy (M7 forward observer) ----
   estimationConfig: () => get<EstimationConfigInfo>("/estimation/config"),
   manualUrl: () => `${API}/manual`,
 

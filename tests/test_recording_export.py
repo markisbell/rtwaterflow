@@ -262,7 +262,7 @@ def test_recording_metadata_recipe(tmp_path):
     assert meta["network"]["network_id"] == "tutorial_hillside"
     assert meta["measurements"]["preset"] == "all_consumers"
     assert "mode" in meta["measurements"]
-    assert meta["estimation"]["enabled"] is False  # M0: stubbed observer
+    assert meta["estimation"]["enabled"] is True  # M7: forward observer on
     assert "interval_seconds" in meta["engine"]
     assert meta["expose_ground_truth"] is True
     assert meta["steps_recorded"] == 0

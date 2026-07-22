@@ -3,10 +3,12 @@
  *
  * Groups the frame's compliance findings by severity (Verletzung /
  * Warnung / Hinweis), each with its German rule citation. Findings derive
- * from the truth layer — in strict mode AND in the measured view the
- * section shows an honesty note instead of truth-derived alarms or a fake
- * "all green" (the observed-layer alarm view arrives with the M7
- * observer); a non-converged cold start shows "no data", never ✅.
+ * from the truth layer, so they show ONLY in the reality view: in strict
+ * mode and in the measured OR estimated views the section shows an honesty
+ * note instead of truth-derived alarms or a fake "all green" — the M7
+ * forward observer produces no findings of its own, so surfacing the truth
+ * findings in the est view would betray the very anomalies the estimate
+ * hides. A non-converged cold start shows "no data", never ✅.
  */
 import { useTranslation } from "react-i18next";
 import type { Finding, StepResult } from "../types";
@@ -22,16 +24,17 @@ const ENTITY_ICON: Record<Finding["entity_kind"], string> = {
   consumer: "🏠", node: "●", pipe: "▬", tank: "🗼", system: "⚙",
 };
 
-export default function AlarmSection({ open, onToggle, latest, observedOnly }: {
+export default function AlarmSection({ open, onToggle, latest, mode }: {
   open: boolean;
   onToggle: () => void;
   latest: StepResult | null;
-  /** measured view: findings derive from truth — hide them honestly */
-  observedOnly: boolean;
+  /** the active Sicht: findings derive from truth, so only "truth" reveals
+   *  them — "observed"/"est" hide them honestly (M7). */
+  mode: "truth" | "observed" | "est";
 }) {
   const { t } = useTranslation();
   const truthAvailable = latest
-    ? latest.findings !== undefined && !observedOnly : true;
+    ? latest.findings !== undefined && mode === "truth" : true;
   const findings = truthAvailable ? (latest?.findings ?? []) : [];
   const nViol = findings.filter((f) => f.severity === "violation").length;
   const nWarn = findings.filter((f) => f.severity === "warning").length;
@@ -48,7 +51,9 @@ export default function AlarmSection({ open, onToggle, latest, observedOnly }: {
              badges={badges}>
       {latest && !truthAvailable && (
         <div className="note" style={{ fontSize: "0.7rem" }}>
-          {observedOnly ? t("alarm.measuredHidden") : t("alarm.truthHidden")}
+          {mode === "est" ? t("alarm.estHidden")
+            : mode === "observed" ? t("alarm.measuredHidden")
+            : t("alarm.truthHidden")}
         </div>
       )}
       {truthAvailable && latest && findings.length === 0 && (

@@ -135,8 +135,8 @@ limits · `500` internal failures only —
 | `POST` | `/measurements/node/{node_id}` | Place a pressure sensor |
 | `POST` | `/measurements/preset` | Apply a placement preset |
 
-- **`GET /estimation/config`** — The estimation policy (enabled / throttle) plus the current estimate sequence number and runtime. STUB in M0: the observer never produces an estimate; ``enabled`` honestly defaults to false.
-- **`POST /estimation/config`** — Partial update. The policy survives grid swaps and scenario loads (held on the engine). Note: in M0 the observer is a stub — enabling it changes nothing but the reported policy.
+- **`GET /estimation/config`** — The estimation policy (enabled / prior basis / throttle) plus the current estimate sequence number and last-solve runtime. M7: the forward observer produces the ``estimated`` layer; ``enabled`` defaults to true.
+- **`POST /estimation/config`** — Partial update. The policy survives grid swaps and scenario loads (held on the engine). The forward observer (M7) refreshes the estimate on converged frames per the metering raster + self-throttle.
 - **`GET /measurements`** — Which consumers carry a water meter, which nodes a pressure sensor, the fidelity mode, and coverage fractions per element class. Source SCADA is always measured (real waterworks are) and does not appear as a placement.
 - **`POST /measurements/consumer/{consumer_id}`** — Install a Wasserzähler at the consumer. In standard mode the new meter starts cold: readings stay null until its first 15-minute window closes.
 - **`POST /measurements/mode`** — Bulk fidelity switch for every placed device: ``full`` = every channel every step; ``standard`` = 15-min-window means aligned to simulated time, null until the first window closes (honest cold start — the window state resets on every switch). Source SCADA stays live either way.

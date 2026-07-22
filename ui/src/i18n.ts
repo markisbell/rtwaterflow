@@ -27,8 +27,9 @@ const de = {
     sightTruth: "Reale Systemsicht (Simulation)",
     sightObserved: "Nur was Wasserzähler und Drucksensoren liefern",
     sightEst:
-      "Berechnete Betreibersicht (in M0 deaktiviert — der Wasser-Beobachter " +
-      "folgt in einem späteren Meilenstein)",
+      "Berechnete Betreibersicht: der Vorwärts-Beobachter (Zwilling aus " +
+      "Messwerten + Bedarfs-Erwartung) — ungemessene Anomalien bleiben " +
+      "unsichtbar",
     help: "Hilfe",
     manual: "Benutzerhandbuch",
     apiDocs: "API-Dokumentation (Swagger)",
@@ -307,11 +308,14 @@ const de = {
     allClear: "keine Regelverletzungen — alles im grünen Bereich",
     truthHidden:
       "Strict Mode: Regelprüfungen basieren auf der (verborgenen) " +
-      "Realität — die Messsicht-Alarme folgen mit dem Beobachter (M7).",
+      "Realität und werden hier nicht angezeigt.",
     measuredHidden:
       "Messsicht: die Regelprüfungen basieren auf der Realitätsschicht " +
-      "und werden hier nicht angezeigt — Alarme aus Messwerten folgen " +
-      "mit dem Beobachter (M7).",
+      "und werden hier nicht angezeigt.",
+    estHidden:
+      "Schätzsicht: Regelmeldungen stammen aus der Wahrheitsschicht — der " +
+      "Vorwärts-Beobachter erzeugt keine eigenen Meldungen (ungemessene " +
+      "Anomalien blieben ohnehin unsichtbar).",
     hint:
       "Jede Meldung zitiert ihre Regel (DVGW W 400-1, W 405, W 300-1). " +
       "Vollständige Zuordnung: docs/COMPLIANCE.md.",
@@ -384,7 +388,7 @@ const de = {
     coverage: "Messabdeckung",
     na: "n. v.",
     observedNote: "Aggregiert nur über bemessene Elemente — die Sicht des Betreibers.",
-    estCaption: "Schätzung (in M0 deaktiviert)",
+    estCaption: "Schätzung (Vorwärts-Beobachter)",
     estQuality: "Schätzgüte",
     estErrMdot: "max |Δṁ| an Messstellen",
     estErrDp: "max |Δp| an Messstellen",
@@ -394,7 +398,8 @@ const de = {
     estSolve: "Beobachter-Rechenzeit",
     estNote:
       "Zweites Netzmodell, angetrieben nur von Messwerten und " +
-      "Erwartungsprofilen — folgt in einem späteren Meilenstein.",
+      "Bedarfs-Erwartung — an ungemessenen Stellen bleibt es bei der " +
+      "Erwartung, ungemessene Anomalien sind unsichtbar.",
   },
 };
 
@@ -420,8 +425,8 @@ const en: typeof de = {
     sightTruth: "Ground-truth system view (simulation)",
     sightObserved: "Only what water meters and pressure sensors deliver",
     sightEst:
-      "Calculated operator view (disabled in M0 — the water observer " +
-      "arrives in a later milestone)",
+      "Calculated operator view: the forward observer (a twin driven by " +
+      "measurements + demand priors) — unmetered anomalies stay invisible",
     help: "Help",
     manual: "User manual (German)",
     apiDocs: "API documentation (Swagger)",
@@ -698,12 +703,15 @@ const en: typeof de = {
     heading: "Alarms (rules)",
     allClear: "no rule violations — all green",
     truthHidden:
-      "Strict mode: rule checks derive from the (hidden) ground truth — " +
-      "measured-view alarms arrive with the observer (M7).",
+      "Strict mode: rule checks derive from the (hidden) ground truth and " +
+      "are not shown here.",
     measuredHidden:
       "Measured view: rule checks derive from the reality layer and are " +
-      "not shown here — measurement-based alarms arrive with the " +
-      "observer (M7).",
+      "not shown here.",
+    estHidden:
+      "Estimated view: rule findings derive from the truth layer — the " +
+      "forward observer produces none of its own (unmetered anomalies " +
+      "would be invisible anyway).",
     hint:
       "Every alarm cites its rule (DVGW W 400-1, W 405, W 300-1). " +
       "Full mapping: docs/COMPLIANCE.md.",
@@ -776,7 +784,7 @@ const en: typeof de = {
     coverage: "Meter coverage",
     na: "n/a",
     observedNote: "Aggregated over metered elements only — the operator's view.",
-    estCaption: "Estimate (disabled in M0)",
+    estCaption: "Estimate (forward observer)",
     estQuality: "Estimate quality",
     estErrMdot: "max |Δṁ| at sensors",
     estErrDp: "max |Δp| at sensors",
@@ -785,8 +793,9 @@ const en: typeof de = {
     estAgeMin: "{{min}} min ago (#{{seq}})",
     estSolve: "Observer solve time",
     estNote:
-      "A second network model driven only by measurements and expected " +
-      "profiles — arrives in a later milestone.",
+      "A second network model driven only by measurements and demand " +
+      "priors — where nothing is metered it stays at the prior, so " +
+      "unmetered anomalies are invisible.",
   },
 };
 

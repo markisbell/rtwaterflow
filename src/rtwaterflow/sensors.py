@@ -57,9 +57,9 @@ _METER_CHANNELS = ("mdot_kg_per_s", "p_bar")
 # Node pressure-sensor channels (single layer: one junction per node).
 _NODE_CHANNELS = ("p_bar",)
 
-#: Placement presets (SPEC §8a). A preset REPLACES the whole placement —
+#: Placement presets (roadmap §4.10). A preset REPLACES the whole placement —
 #: the bulk actions of the Messungen panel, not incremental additions.
-PRESETS = ("all_consumers", "plant_only", "key_points", "clear")
+PRESETS = ("all_consumers", "scada", "plant_only", "key_points", "clear")
 DEFAULT_PRESET = "all_consumers"
 
 #: Meter fidelity modes (SPEC §7/§8a). One bulk mode for every placed
@@ -171,9 +171,15 @@ class MeasurementSet:
     def apply_preset(self, preset: str) -> None:
         """Bulk placement (SPEC §8a). Replaces the current placement:
 
-        * ``all_consumers`` — heat meter at every substation (M2–M4 default).
-        * ``plant_only`` — only the plant: its SCADA (always on) plus a T/p
-          sensor pair at the plant node.
+        * ``all_consumers`` — a water meter at every consumer (the "full
+          metering" didactic preset; household consumption fully observed).
+        * ``scada`` — realistic waterworks SCADA (roadmap §4.10): pressure
+          loggers at the critical points (the source node + every net end)
+          and NO household meters — the source/tank/station/well telemetry
+          is always on the wire anyway, so the operator sees the supply side
+          and the extremities but not individual household draws.
+        * ``plant_only`` — only the plant: its SCADA (always on) plus a
+          pressure sensor at the plant node.
         * ``key_points`` — plant T/p + T/p at the net ends (leaf nodes) + a
           heat meter at the *currently known* worst-point consumer (from the
           last converged frame; before the first solve no worst point is
@@ -189,6 +195,12 @@ class MeasurementSet:
         self.node_sensors = set()
         if preset == "all_consumers":
             self.consumer_meters = {int(c) for c in ctx.get("consumer_ids", [])}
+        elif preset == "scada":
+            # critical pressure loggers: the source node + the net ends; no
+            # household meters (the supply-side telemetry is always live)
+            if ctx.get("plant_node"):
+                self.node_sensors.add(str(ctx["plant_node"]))
+            self.node_sensors |= {str(n) for n in ctx.get("end_nodes", [])}
         elif preset == "plant_only":
             if ctx.get("plant_node"):
                 self.node_sensors = {str(ctx["plant_node"])}

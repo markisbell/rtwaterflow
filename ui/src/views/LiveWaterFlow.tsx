@@ -154,8 +154,8 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
 
   // Three-layer view switcher fallback chain: truth → observed when the
   // server withholds ground truth (strict mode strips `summary`); est →
-  // truth/observed when no estimate exists (always the case in M0 — the
-  // estimator is stubbed, the branch stays wired for the M7 observer).
+  // truth/observed when no estimate exists (estimation disabled, or before
+  // the first estimate). The M7 forward observer populates `estimated`.
   const canReveal = latest ? latest.summary !== undefined : true;
   const est = latest?.estimated ?? null;
   const mode: "truth" | "observed" | "est" =
@@ -164,12 +164,14 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
     : viewMode;
   // est mode splices the estimated arrays over the live frame — the same
   // MapDiagram/OverviewSection render it (blueprint splice pattern).
-  // NB findings are NOT spliced: they derive from truth — when est mode
-  // goes live (M7), re-derive them on the twin payload or strip them
-  // here (M4 review note).
+  // findings are STRIPPED here (set to []): they derive from the truth
+  // layer, so keeping them would draw alarm halos + list violations for
+  // anomalies the estimate is meant to hide (M7 honesty — the forward
+  // observer produces no findings of its own; the AlarmSection shows the
+  // est honesty note instead, via mode below).
   const frame = mode === "est" && latest && est
     ? { ...latest, junctions: est.junctions, pipes: est.pipes,
-        consumers: est.consumers, summary: est.summary }
+        consumers: est.consumers, summary: est.summary, findings: [] }
     : latest;
   // estimate age in simulated minutes (stale attachment)
   const estAgeMin = latest && est
@@ -244,7 +246,7 @@ export default function LiveWaterFlow({ topo, view, onView, onTopoChange }: {
                          est={est} estAgeMin={estAgeMin} />
 
         <AlarmSection open={alOpen} onToggle={() => setAlOpen((v) => !v)}
-                      latest={latest} observedOnly={mode === "observed"} />
+                      latest={latest} mode={mode} />
 
         <WorstPointSection open={wpOpen} onToggle={() => setWpOpen((v) => !v)}
                            latest={latest} trace={pTrace} />

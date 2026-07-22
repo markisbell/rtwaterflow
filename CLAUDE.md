@@ -642,3 +642,79 @@ value (real aquifers respond over months, TF §5).
   ForwardObserver water twin with archetype demand priors, honesty
   tripwire tests (a burst at an unmetered node must NOT appear in the
   estimate).
+
+### 2026-07-22 — M7: observability (branch `m0-fork-strip`)
+
+**Built** (roadmap §6 M7, §4.10; TF §7):
+
+- **ForwardObserver** (`estimator.py`, full rewrite from the M0 stub) — a
+  "digital-twin estimator". pandapipes has no state estimator, so the
+  `estimated` layer is a second pandapipes net driven ONLY by operator
+  knowledge: source/tank/pump/PRV SCADA (copied from the live dispatch —
+  tank ext_grid heads are level SCADA), metered consumer flows, and
+  **demand priors** for unmetered consumers. The twin re-derives its OWN
+  pump operating points (the shared `solve_hydraulic`) and its deviation
+  from the MEASUREMENTS at sensored points is the `error`/innovation
+  (valid in strict mode — computed against measurements, not truth).
+- **Priors are the EXPECTED demand, noise-free** — `build_demand_profiles`
+  gained a `noise=False` flag that drops the per-tick stochastic multiplier
+  (E[·]=1), and `build_prior_book` reads only `sim.inputs` + the operator's
+  weather knob + placement recipes (`archetype` basis) or the flat
+  contracted base (`design` basis). Never the mutable runtime
+  `sim.profiles`, so a runtime anomaly cannot leak into the prior.
+- **The honesty core**: every emitter withdrawal (leak/burst/hydrant) is
+  ZEROED in the twin, and a check valve the TRUTH shut this tick is re-opened
+  in the twin (a CV closure is a physical response, not an operator command)
+  so the twin re-derives its own — a hidden burst/leak/anomaly at an
+  unmetered node stays INVISIBLE; the same anomaly at a METERED consumer
+  propagates (the meter delivers it).
+- **Shared solver**: extracted `solve_hydraulic(net, iter_base,
+  producer_meta, cv_closed)` (the station operating-point secant +
+  check-valve logic) from `Simulator._solve_hydraulic` so the truth path and
+  the twin use ONE operating-point solver, never two.
+- **Wire/API/UI**: `StepResult.estimated` survives strict mode (derived from
+  measurements). `EstimationConfig` (`enabled` now defaults ON,
+  `prior_basis`, `throttle_factor`); GET/POST `/estimation/config` with
+  `prior_basis` validation; the policy is engine-held (survives grid swaps)
+  and is saved/restored in scenario recipes. New **`scada`** placement preset
+  (critical pressure loggers at source + net ends, no household meters). The
+  UI three-view splice (Realität/Gemessen/**Schätzung**) now renders the
+  estimate + an estimate-quality panel (innovation + stale age); the est view
+  strips truth findings so no alarm halo/list leaks the hidden anomaly.
+
+**Tests: 229 backend ×2 + 23 vitest**; tsc + vite build green; API.md 61
+routes. Acceptance (roadmap §4.10): estimator innovation ≈0 at sensored
+points on an unperturbed full-coverage run (Musterdorf: feed est==truth,
+max |Δṁ| < 1e-3); the honesty tripwires — a burst at an unmetered node moves
+the WHOLE estimate by ~0 (exact 0 on the fixed-boundary hillside net), an
+unmetered consumer anomaly stays at the prior, a metered anomaly propagates,
+the `clear` preset makes the estimate equal the priors; throttle/raster stale
+attachment; twin failure (exception AND non-convergence) is data.
+
+**Review:** the multi-agent adversarial review (3 lenses — honesty /
+numerics / integration — + per-finding verification) surfaced **5** findings
+(3 confirmed + 2 plausible; 6 rejected as intentional design), ALL fixed:
+(1, MAJOR) the est VIEW rendered truth-derived alarm halos + the full findings
+list, betraying the very unmetered anomalies the estimate hides → the est
+frame now strips `findings` and the Alarmzentrale shows an est honesty note;
+(2) the non-convergent-twin path and multi-day estimation were untested →
+tests added; (3) stale "M0/stub" comments → refreshed; (4) the burst tripwire
+asserted invariance at one node/tick → strengthened to whole-estimate
+invariance + an exact-0 fixed-boundary variant; (5) the estimation policy was
+not saved in scenarios → added + round-tripped. Plus a belt-and-suspenders
+fix beyond the findings: the twin re-opens truth CV closures so a
+burst-induced closure cannot leak.
+
+**Deviation (documented):** the observer is deliberately NON-deterministic (a
+wall-clock self-throttle) and is force-disabled on export replays
+(`exporter.prepare_replay`) so byte-stable replay is unaffected; it never
+touches the recorder CSVs. Enabling it by default roughly doubles the engine
+step cost (a twin deepcopy + solve per sim), so the full test suite runs
+~18 min — accepted (the roadmap wires the estimated view on by default). The
+measured/estimated views still do not derive their OWN rule alarms (compliance
+runs on truth only); that stays a future enhancement.
+
+- Next: **M8 — geodata bundle builder + real-town bundles + editor**
+  (roadmap §6): `tools/bundle_builder` (osmnx + DGM sampling → bundle),
+  real-town demo bundles, the NetzStudio water editor with live W 400-1
+  load-case checking.

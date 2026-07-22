@@ -16,6 +16,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from ..estimator import PRIOR_BASES, EstimationConfig
 from ..scenarios import ScenarioStore
 from .consumers import build_consumer_op
 from .networks import apply_network
@@ -79,6 +80,9 @@ def scenarios_save(req: ScenarioSaveRequest) -> dict:
                 for e in sim.emitters.emitters.values() if e.kind == "burst"],
         },
         "consumer_ops": list(sim.consumer_ops),
+        # M7 estimation policy (the forward observer's config — an operator
+        # setting, restored on load)
+        "estimation": sim.est_config.as_dict(),
         # sensor placement: meters are stored by consumer NAME (element ids
         # shift across replay; the consumer-op replay recreates the same
         # names deterministically), node sensors by node name.
@@ -144,6 +148,23 @@ async def scenarios_load(sid: str) -> dict:
         except Exception:  # noqa: BLE001
             log.warning("scenario '%s': skipped environment overrides %s",
                         sid, env)
+
+    # 1c-2) M7 estimation policy (engine-held; tolerant — an unknown
+    # prior_basis or a legacy recipe without the block must not abort load)
+    est = doc.get("estimation")
+    if isinstance(est, dict):
+        try:
+            cur = sim.est_config
+            basis = str(est.get("prior_basis", cur.prior_basis))
+            if basis not in PRIOR_BASES:
+                basis = cur.prior_basis          # unknown → keep current
+            app.engine.set_est_config(EstimationConfig(
+                enabled=bool(est.get("enabled", cur.enabled)),
+                prior_basis=basis,
+                throttle_factor=float(
+                    est.get("throttle_factor", cur.throttle_factor))))
+        except Exception:  # noqa: BLE001
+            log.warning("scenario '%s': skipped estimation policy %s", sid, est)
 
     # 1d) M5 pressure-dependent hydraulics (config; tolerant PER ENTRY —
     # a single stale emitter must not abort the rest of the block, matching

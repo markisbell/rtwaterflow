@@ -1,4 +1,4 @@
-"""Sensor placement endpoints and the estimation policy (stub in M0).
+"""Sensor placement endpoints and the estimation policy.
 
 The measurable layer's CRUD: water meters (Wasserzähler) at consumers,
 pressure sensors (Drucksensoren) at nodes, the bulk fidelity mode
@@ -6,9 +6,8 @@ pressure sensors (Drucksensoren) at nodes, the bulk fidelity mode
 fresh placement payload (placement + coverage), so the UI panel and the map
 markers re-sync from the response — the blueprint convention.
 
-``GET/POST /estimation/config`` configures the estimation policy. The
-observer itself is STUBBED in M0 (``enabled`` defaults to false, no estimate
-is produced); the water forward observer returns in M7 of the roadmap. The
+``GET/POST /estimation/config`` configures the estimation policy (M7): the
+forward observer's ``enabled`` / ``prior_basis`` / ``throttle_factor``. The
 policy is an operator setting — it survives grid swaps (held on the engine).
 
 Error discipline: 404 unknown element / no device to remove, 422 invalid
@@ -109,7 +108,8 @@ def set_mode(body: ModeBody) -> dict:
 
 
 class PresetBody(BaseModel):
-    preset: Literal["all_consumers", "plant_only", "key_points", "clear"]
+    preset: Literal["all_consumers", "scada", "plant_only",
+                    "key_points", "clear"]
 
 
 @router.post("/measurements/preset", summary="Apply a placement preset")
@@ -125,13 +125,17 @@ def set_preset(body: PresetBody) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Estimation policy (stub in M0): the future water observer's knobs
+# Estimation policy (M7): the forward observer's knobs
 # ---------------------------------------------------------------------------
 
 class EstimationBody(BaseModel):
     """Partial update of the estimation policy (422 outside the bounds)."""
 
     enabled: bool | None = None
+    prior_basis: Literal["archetype", "design"] | None = Field(
+        default=None,
+        description="unmetered-consumer expectation: 'archetype' (the "
+                    "expected demand profile) or 'design' (flat base demand)")
     throttle_factor: float | None = Field(
         default=None, ge=0.0, le=20.0,
         description="wall-clock self-throttle: a new estimate only after "
@@ -150,21 +154,23 @@ def _estimation_payload(app: App) -> dict:
 
 @router.get("/estimation/config", summary="Estimation policy")
 def get_estimation_config() -> dict:
-    """The estimation policy (enabled / throttle) plus the current estimate
-    sequence number and runtime. STUB in M0: the observer never produces an
-    estimate; ``enabled`` honestly defaults to false."""
+    """The estimation policy (enabled / prior basis / throttle) plus the
+    current estimate sequence number and last-solve runtime. M7: the forward
+    observer produces the ``estimated`` layer; ``enabled`` defaults to true."""
     return _estimation_payload(get_app())
 
 
 @router.post("/estimation/config", summary="Configure the estimation")
 def set_estimation_config(body: EstimationBody) -> dict:
     """Partial update. The policy survives grid swaps and scenario loads
-    (held on the engine). Note: in M0 the observer is a stub — enabling it
-    changes nothing but the reported policy."""
+    (held on the engine). The forward observer (M7) refreshes the estimate
+    on converged frames per the metering raster + self-throttle."""
     app = get_app()
     cur = app.sim.est_config
     cfg = EstimationConfig(
         enabled=cur.enabled if body.enabled is None else bool(body.enabled),
+        prior_basis=(cur.prior_basis if body.prior_basis is None
+                     else str(body.prior_basis)),
         throttle_factor=(cur.throttle_factor if body.throttle_factor is None
                          else float(body.throttle_factor)),
     )

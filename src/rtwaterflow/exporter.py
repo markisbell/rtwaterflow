@@ -174,7 +174,9 @@ class BulkExporter:
           replacing the live warm-start state;
         * measurement windows fresh (standard-mode meters cold-start
           honestly), last-payload/blind-spot cleared;
-        * estimation disabled on the replay copy (stubbed in M0 anyway).
+        * estimation disabled on the replay copy — the M7 forward observer's
+          wall-clock self-throttle is non-deterministic, so a byte-stable
+          replay must not run it.
 
         Public on purpose: the live-vs-export byte-compatibility test starts
         its live recording from this same normalized state.

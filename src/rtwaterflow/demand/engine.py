@@ -89,8 +89,16 @@ def build_demand_profiles(
     inputs: NetInputs,
     steps_per_day: int,
     env: EnvironmentState | None = None,
+    noise: bool = True,
 ) -> np.ndarray:
-    """The full-horizon demand array ``[n_consumers, steps_per_day · n_days]``."""
+    """The full-horizon demand array ``[n_consumers, steps_per_day · n_days]``.
+
+    ``noise=False`` drops the per-tick stochastic multiplier and returns the
+    **expected** demand (archetype × day × weather, mean ≈ 1 per tick). This
+    is the forward observer's prior basis (M7): a deterministic expectation
+    derived from the planning contract, never the realized per-tick truth —
+    so a runtime anomaly injected into the live profile cannot leak into it.
+    """
     env = env or EnvironmentState()
     n_days = inputs.n_days
     n_ticks = steps_per_day * n_days
@@ -154,8 +162,11 @@ def build_demand_profiles(
                 gain = (0.7 + 1.3 * heat) * (0.5 + 0.5 * dryness[d])
                 series = series + gain * irrigation_ticks
             sl = slice(d * steps_per_day, (d + 1) * steps_per_day)
-            noise = np.clip(
-                rng.normal(1.0, NOISE_SIGMA, steps_per_day), 0.3, None)
-            out[ci, sl] = base * series * noise
+            if noise:
+                mult = np.clip(
+                    rng.normal(1.0, NOISE_SIGMA, steps_per_day), 0.3, None)
+            else:
+                mult = 1.0   # expected demand (observer prior, M7)
+            out[ci, sl] = base * series * mult
 
     return out

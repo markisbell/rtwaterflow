@@ -354,8 +354,9 @@ export interface MeasurementsResponse {
   expose_ground_truth: boolean;
 }
 
-/** The estimated layer — STUBBED in M0 (always null on the wire); the type
- *  stays so the three-view splice pattern survives for the M7 water observer. */
+/** The estimated layer (M7 forward observer): a twin net driven only by
+ *  measurements + demand priors. Null on the wire when estimation is disabled;
+ *  the three-view splice renders it as the "Schätzung" operator view. */
 export interface EstimatedState {
   junctions: JunctionState[];
   pipes: PipeState[];
@@ -406,10 +407,11 @@ export interface StepResult {
   error: string | null;
 }
 
-// ---- GET/POST /estimation/config (stub in M0) -----------------------------------
+// ---- GET/POST /estimation/config (M7 forward observer) --------------------------
 
 export interface EstimationConfigInfo {
   enabled: boolean;
+  prior_basis: "archetype" | "design";
   throttle_factor: number;
   seq: number;
   last_solve_ms: number | null;
