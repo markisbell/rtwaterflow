@@ -147,6 +147,64 @@ def test_lf3_fails_on_a_physically_invalid_fire_frame():
     assert lf3["solver_status"] != "ok" or lf3["p_fire_bar"] < 1.5
 
 
+def _editor_gravity_bundle() -> dict:
+    """A tiny gravity net in the exact shape the editor's toBundle produces:
+    an ext_grid source on the high point + two downhill consumers + pipes."""
+    STEPS = 96
+    return {
+        "name": "Editortest",
+        "network_structure": {
+            "name": "Editortest",
+            "attribution": ["© OpenStreetMap contributors (ODbL)",
+                            "Elevation: EU-DEM v1.1 — Copernicus"],
+            "junctions": [
+                {"name": "quelle", "kind": "source", "geo": [51.30, 6.50],
+                 "elevation_m": 70.0, "pn_bar": 3.9},
+                {"name": "n1", "kind": "consumer", "geo": [51.305, 6.505],
+                 "elevation_m": 50.0, "pn_bar": 5.9},
+                {"name": "n2", "kind": "consumer", "geo": [51.31, 6.51],
+                 "elevation_m": 45.0, "pn_bar": 6.4},
+            ]},
+        "pipes": {"pipes": [
+            {"from_node": "quelle", "to_node": "n1", "dn": 160, "material": "PE",
+             "year_laid": 2015, "geometry": [[51.30, 6.50], [51.305, 6.505]]},
+            {"from_node": "n1", "to_node": "n2", "dn": 160, "material": "PE",
+             "year_laid": 2015, "geometry": [[51.305, 6.505], [51.31, 6.51]]},
+        ]},
+        "consumers": {"consumers": [
+            {"node": "n1", "name": "Haus 1", "mdot_kg_per_s": 0.18,
+             "kind": "residential_village", "storeys": 2,
+             "size": {"population": 120}},
+            {"node": "n2", "name": "Haus 2", "mdot_kg_per_s": 0.18,
+             "kind": "residential_village", "storeys": 2,
+             "size": {"population": 120}},
+        ]},
+        "supply": {"supplies": [
+            {"node": "quelle", "name": "Einspeisung", "kind": "ext_grid",
+             "p_bar": 2.9}], "prvs": [], "tanks": [], "stations": [],
+            "wellfields": []},
+        "environment": {
+            "resolution_minutes": 15, "steps": STEPS,
+            "t_air_c": [15.0] * STEPS, "day_types": ["workday"],
+            "dryness": [0.3], "season_day_of_year": 205},
+    }
+
+
+def test_editor_commission_flow(tmp_path):
+    """The full 'draw → verify → commission' path: an editor-shaped gravity
+    bundle load-checks (three cases) and commissions via /networks/import,
+    appearing in the catalog as a user network that loads (roadmap §5)."""
+    bundle = _editor_gravity_bundle()
+    with make_api_client(user_networks_dir=tmp_path,
+                         scenarios_dir=tmp_path / "sc") as client:
+        chk = client.post("/editor/loadcheck", json=bundle).json()
+        assert len(chk["cases"]) == 3 and "passed" in chk
+        imp = client.post("/networks/import", json=bundle)
+        assert imp.status_code == 200
+        nets = client.get("/networks").json()["networks"]
+        assert any(n["source"] == "user" for n in nets)
+
+
 def test_loadcheck_422_on_schema_invalid_bundle():
     """Regression (review): a per-document schema error (a field out of its
     bounds) → 422 with a problems list, never a bare 500."""

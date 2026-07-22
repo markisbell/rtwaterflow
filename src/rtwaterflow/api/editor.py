@@ -34,7 +34,13 @@ from .runtime import get_app
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["editor"])
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+#: the main overpass-api.de instance is frequently overloaded (504 on
+#: village-sized bboxes), so try mirrors in turn before giving up (review-proof)
+OVERPASS_URLS = (
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.osm.ch/api/interpreter",
+)
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OPENTOPO_URL = "https://api.opentopodata.org/v1/eudem25m"
 _UA = {"User-Agent": "rtwaterflow-editor/0.1 (educational water-network editor)"}
@@ -90,16 +96,25 @@ def editor_streets(s: float = Query(...), w: float = Query(...),
     cached = _cache_get(key)
     if cached is not None:
         return cached
-    try:
-        r = httpx.post(OVERPASS_URL,
-                       data={"data": _STREET_QUERY.format(s=s, w=w, n=n, e=e)},
-                       headers=_UA, timeout=60.0)
-        r.raise_for_status()
-        raw = r.json()
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Overpass request failed: {exc}")
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(502, f"Overpass returned an unusable response: {exc!r}")
+    query = _STREET_QUERY.format(s=s, w=w, n=n, e=e)
+    raw, last_err = None, "no Overpass endpoint reachable"
+    for url in OVERPASS_URLS:
+        try:
+            r = httpx.post(url, data={"data": query}, headers=_UA, timeout=35.0)
+            r.raise_for_status()
+            doc = r.json()
+        except httpx.HTTPError as exc:       # overloaded mirror → try the next
+            last_err = f"{url}: {exc}"
+            log.info("Overpass %s failed (%s) — trying the next mirror", url, exc)
+            continue
+        except (ValueError, KeyError) as exc:
+            last_err = f"{url}: unusable response {exc!r}"
+            continue
+        raw = doc
+        if doc.get("elements"):              # a mirror with actual data wins;
+            break                            # an empty 200 (mirror gap) → keep trying
+    if raw is None:
+        raise HTTPException(502, f"Overpass request failed: {last_err}")
 
     streets, buildings = [], []
     for el in raw.get("elements", []):

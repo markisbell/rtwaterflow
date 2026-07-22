@@ -5,6 +5,9 @@ import type {
   ApplyResponse, NetworkImportBundle, NetworkListItem, NetworkPreview,
 } from "../types";
 import { fmt } from "../scales";
+import NetzStudioEditor from "../editor/NetzStudioEditor";
+import { emptyModel, type EditorModel } from "../editor/model";
+import type { EditorStreet } from "../editor/streetGraph";
 
 const FIVE_FILES = [
   "network_structure", "pipes", "consumers", "supply", "environment",
@@ -24,6 +27,12 @@ export default function NetzStudio({ selected, onSelect, onApplied }: {
   const [error, setError] = useState<string | null>(null);
   const [netPrev, setNetPrev] = useState<NetworkPreview | null>(null);
   const [busy, setBusy] = useState(false);
+  //: M8 stage 2b — the "how networks are built" editor grows alongside the
+  //  catalog picker, switchable at the top of the view
+  const [mode, setMode] = useState<"catalog" | "editor">("catalog");
+  // held here so a drawn network survives switching back to the catalog (review)
+  const [editorModel, setEditorModel] = useState<EditorModel>(() => emptyModel());
+  const [editorStreets, setEditorStreets] = useState<EditorStreet[]>([]);
 
   useEffect(() => {
     api.networks().then((r) => setNetworks(r.networks))
@@ -95,7 +104,25 @@ export default function NetzStudio({ selected, onSelect, onApplied }: {
   if (!networks) return <div className="spinner">{t("netz.loading")}</div>;
 
   return (
-    <div className="netzstudio">
+    <div className="netzstudio" style={{ display: "flex",
+         flexDirection: "column", height: "100%" }}>
+      {/* mode switch: pick from the catalog, or draw a new net on the map */}
+      <div className="mbar-seg" role="group"
+           style={{ alignSelf: "center", margin: "6px 0" }}>
+        <button className={mode === "catalog" ? "on" : ""}
+                onClick={() => setMode("catalog")}>📚 {t("netz.modeCatalog")}</button>
+        <button className={mode === "editor" ? "on" : ""}
+                onClick={() => setMode("editor")}>🛠 {t("netz.modeEditor")}</button>
+      </div>
+
+      {mode === "editor" ? (
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <NetzStudioEditor onApplied={onApplied}
+            model={editorModel} setModel={setEditorModel}
+            streets={editorStreets} setStreets={setEditorStreets} />
+        </div>
+      ) : (
+      <div className="netzstudio" style={{ flex: 1, minHeight: 0 }}>
       {/* ---- 1 · pick or import a network -------------------------------- */}
       <aside className="ns-list">
         <h3>{t("netz.step1")}</h3>
@@ -155,6 +182,8 @@ export default function NetzStudio({ selected, onSelect, onApplied }: {
           </>
         )}
       </section>
+      </div>
+      )}
     </div>
   );
 }

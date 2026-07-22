@@ -858,3 +858,57 @@ tests.
   itself: place/draw on real streets, live load-check panel, commission) and
   **stage 2c** — the hilly Bavarian Druckzonen bundle (PRV zone-splitting in
   the synthesiser).
+
+### 2026-07-22 — M8 stage 2b: NetzStudio interactive map editor
+
+The editor **frontend** — draw a water network on real OSM streets, verify it
+against the W 400-1 load cases (stage 2a), commission it. Ported from the
+sibling `gridedit` tool's interaction model, reimplemented for water in the
+MIT repo. Closes teaching goal 1 ("how networks are built").
+
+**Built** (roadmap §5):
+
+- **`ui/src/editor/model.ts`** — the editor model (source / junction /
+  consumer nodes + street-routed pipes), `makeNode` (the pure, tested
+  placement logic + collision-proof naming), `validateModel` (structural +
+  connectivity + duplicate-name checks), and `toBundle` (serialise to the
+  five-file bundle: one ext_grid source, head-derived `pn_bar`, consumers from
+  population, standard environment, OSM + EU-DEM attribution) — mirroring the
+  offline builder so a hand-drawn net loads/validates/solves identically.
+- **`ui/src/editor/streetGraph.ts`** — client street routing: snap-to-street +
+  Dijkstra in a local metric projection, so drawn pipes follow the streets.
+- **`ui/src/editor/EditorMap.tsx`** — the Leaflet surface: renders streets +
+  the model, tool-based clicks (place source/junction/consumer with the DEM
+  elevation frozen on; draw a street-snapped pipe by picking two nodes;
+  delete). **`NetzStudioEditor.tsx`** — the container + side panel (toolbox,
+  pipe catalog, the live W 400-1 load-case results, commission). A
+  **Katalog/Editor** toggle in NetzStudio hosts it; the drawn net is held in
+  NetzStudio so it survives the toggle.
+- **Backend**: `/editor/streets` now tries several Overpass **mirrors** (the
+  main instance 504s on village bboxes) with a bounded timeout, preferring a
+  non-empty result. `load_network_from_docs` (stage 2a) validates the commit.
+
+**Tests: 250 backend + 36 vitest**; tsc + vite build green. 13 editor vitest
+(model/validate/toBundle, the placement wiring, street routing) + the backend
+`draw→loadcheck→commission` integration test. Verified **live**: the editor
+renders, streets load (mirror fallback confirmed against a transient 504), and
+placing a source (◆) + a consumer (▲) creates the right node kinds with the
+DEM elevation fetched.
+
+**Review:** the multi-agent adversarial review (2 lenses + verification)
+surfaced **6** findings, all fixed — including a **critical** one: the map
+click handler was registered once and called a `placeNode` that closed over
+the initial `tool='pan'`, so EVERY map-placed node became a generic junction —
+sources/consumers were unplaceable and commission was permanently blocked. Fix:
+the handler now passes the LIVE tool (`cb.current.tool`) into a stable
+`placeNode`; the placement logic moved into the pure, unit-tested `makeNode`
+(the tests now cover exactly this wiring — the bug slipped past the earlier
+tests, which only exercised `toBundle` on hand-built models). Also: (major)
+delete-then-add reused a consumer name → duplicate names the loader rejects
+with a raw 422 → collision-proof naming + an in-panel duplicate-name check;
+(major) test-adequacy gaps closed; (minor) the DEM fetch moved out of the
+`setModel` updater (StrictMode double-fire); (minor) the drawn net survives
+the Katalog↔Editor toggle (state lifted); (minor) the Overpass loop hardened.
+
+- Next: **M8 stage 2c** — the hilly Bavarian Druckzonen bundle (PRV
+  zone-splitting in the synthesiser). That closes M8.

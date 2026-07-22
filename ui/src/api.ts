@@ -1,12 +1,15 @@
 import type {
   ActiveConfig,
   ApplyResponse,
+  EditorStreetsResponse,
+  ElevationResponse,
   EmitterInfo,
   EmitterState,
   EngineStatus,
   EnvironmentInfo,
   EstimationConfigInfo,
   ExportStatus,
+  LoadCheckResult,
   MeasurementsResponse,
   MeterMode,
   MeterPreset,
@@ -141,6 +144,19 @@ export const api = {
   networkPreview: (id: string) => get<NetworkPreview>(`/networks/${id}`),
   importNetwork: (bundle: NetworkImportBundle) =>
     post<NetworkPreview>("/networks/import", bundle),
+
+  // ---- M8 stage 2 — NetzStudio editor ----
+  editorStreets: (s: number, w: number, n: number, e: number) =>
+    get<EditorStreetsResponse>(
+      `/editor/streets?s=${s}&w=${w}&n=${n}&e=${e}`),
+  editorGeocode: (q: string) =>
+    get<{ hits: { name: string; lat: number; lon: number }[] }>(
+      `/editor/geocode?q=${encodeURIComponent(q)}`),
+  editorElevation: (points: [number, number][]) =>
+    post<ElevationResponse>("/editor/elevation", { points }),
+  editorLoadcheck: (bundle: unknown) =>
+    post<LoadCheckResult>("/editor/loadcheck", bundle),
+
   applyConfig: (network_id: string) =>
     post<ApplyResponse>("/config/apply", { network_id }),
   activeConfig: () => get<ActiveConfig>("/config/active"),

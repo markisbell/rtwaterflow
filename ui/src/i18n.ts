@@ -138,6 +138,8 @@ const de = {
   netz: {
     loading: "Lade Netzbibliothek…",
     failed: "Netzbibliothek konnte nicht geladen werden:",
+    modeCatalog: "Katalog",
+    modeEditor: "Editor",
     step1: "1 · Netz wählen",
     step3: "2 · Prüfen & starten",
     library: "Bibliothek",
@@ -534,6 +536,8 @@ const en: typeof de = {
   netz: {
     loading: "Loading network library…",
     failed: "Failed to load the network library:",
+    modeCatalog: "Catalog",
+    modeEditor: "Editor",
     step1: "1 · Pick a network",
     step3: "2 · Check & start",
     library: "Library",

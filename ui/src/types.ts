@@ -410,6 +410,34 @@ export interface StepResult {
   error: string | null;
 }
 
+// ---- M8 stage 2 — NetzStudio editor -------------------------------------------
+
+export interface EditorStreetsResponse {
+  bbox: number[];
+  streets: { id: number; name: string | null; nodes: [number, number][] }[];
+  buildings: { id: number; center: [number, number] }[];
+  attribution: string;
+}
+
+export interface ElevationResponse {
+  elevations: (number | null)[];
+  attribution: string | null;
+}
+
+export interface LoadCase {
+  id: string;
+  name: string;
+  passed: boolean;
+  solver_status: string;
+  detail: string;
+  [k: string]: unknown;
+}
+
+export interface LoadCheckResult {
+  passed: boolean;
+  cases: LoadCase[];
+}
+
 // ---- GET/POST /estimation/config (M7 forward observer) --------------------------
 
 export interface EstimationConfigInfo {
