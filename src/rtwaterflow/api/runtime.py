@@ -194,4 +194,7 @@ def build_topology(network_id: str, sim: Simulator) -> dict:
         "stations": stations,
         "steps_per_day": sim.profiles.steps_per_day,
         "n_days": sim.profiles.n_days,
+        # geodata credit for OSM/DEM-derived bundles (M8, TF §11) — the UI
+        # appends it to the Leaflet attribution control; None for hand-authored
+        "attribution": inputs.structure.attribution,
     }

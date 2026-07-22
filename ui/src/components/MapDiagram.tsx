@@ -278,9 +278,17 @@ export default function MapDiagram({
     });
     mapRef.current = map;
     map.zoomControl.setPosition("topleft");
-    L.control.attribution({ prefix: false, position: "bottomleft" }).addAttribution(
+    const attribution = L.control.attribution(
+      { prefix: false, position: "bottomleft" }).addAttribution(
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    ).addTo(map);
+    );
+    // geodata credit for OSM/DEM-built bundles (M8) — the data sources behind
+    // this network's geometry + elevations, distinct from the tile credit
+    for (const credit of topo.attribution ?? []) {
+      attribution.addAttribution(
+        credit.replace(/&/g, "&amp;").replace(/</g, "&lt;"));
+    }
+    attribution.addTo(map);
 
     const nodeGeo = new Map<string, [number, number]>();
     for (const n of topo.nodes) nodeGeo.set(n.name, n.geo);

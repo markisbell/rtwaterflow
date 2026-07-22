@@ -15,6 +15,9 @@ build/
 data/recordings/
 data/user_networks/
 
+# osmnx / geodata builder Overpass + DEM cache (M8 — regenerated on demand)
+cache/
+
 # node (ui/, later milestones)
 node_modules/
 

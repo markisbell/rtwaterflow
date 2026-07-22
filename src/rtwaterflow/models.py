@@ -57,6 +57,10 @@ class StructureJunction(_StrictModel):
 class NetworkStructure(_StrictModel):
     name: str
     junctions: list[StructureJunction] = Field(min_length=2)
+    #: visible-credit strings for geodata-derived bundles (M8, TF §11) — OSM
+    #: (ODbL) + the DEM source; rendered as a map attribution. Hand-authored
+    #: synthetic bundles omit it.
+    attribution: Optional[list[str]] = None
 
     @field_validator("junctions")
     @classmethod

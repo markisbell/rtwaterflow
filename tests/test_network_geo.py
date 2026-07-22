@@ -26,6 +26,9 @@ EXPECTED_BBOX = {
     # Lauenau: the M6 wells & aquifer town in the Weserbergland (modelled
     # on the real Lauenau 2020 water emergency; 210-268 m elevations)
     "lauenau": (52.29, 52.30, 9.38, 9.41),
+    # Alpen (Ortskern): the M8 geodata-built bundle — REAL OSM streets on the
+    # flat Niederrhein (21-53 m elevations from EU-DEM), UTM32
+    "alpen": (51.56, 51.59, 6.49, 6.53),
 }
 
 

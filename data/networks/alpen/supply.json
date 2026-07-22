@@ -1,0 +1,14 @@
+{
+ "supplies": [
+  {
+   "node": "n11",
+   "name": "Einspeisung Alpen (Ortskern)",
+   "kind": "ext_grid",
+   "p_bar": 2.86
+  }
+ ],
+ "prvs": [],
+ "tanks": [],
+ "stations": [],
+ "wellfields": []
+}

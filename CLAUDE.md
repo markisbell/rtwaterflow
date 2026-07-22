@@ -718,3 +718,82 @@ runs on truth only); that stays a future enhancement.
   (roadmap §6): `tools/bundle_builder` (osmnx + DGM sampling → bundle),
   real-town demo bundles, the NetzStudio water editor with live W 400-1
   load-case checking.
+
+### 2026-07-22 — M8 stage 1: geodata bundle builder + real-town bundle
+
+M8 is large (builder + real-town bundles + the NetzStudio editor), so it is
+split. **Stage 1 (this entry): the offline geodata bundle builder + one
+real-town bundle.** Stage 2 (the NetzStudio water editor, porting the
+`gridedit` interactive-OSM approach for water; + a hilly Bavarian Druckzonen
+town) follows.
+
+**Built** (roadmap §6 M8, TF §11) — the full geo stack installs + runs on
+Windows (osmnx 2.1, rasterio/GDAL 3.12, pyproj, geopandas, pyogrio):
+
+- **`tools/bundle_builder/`** — turns a real German town into the five-file
+  bundle. `osm.py` fetches the OSM street graph (osmnx → Overpass), projects
+  to UTM (EPSG:25832/25833), flattens to plain geometry (WGS84 + metres) +
+  the OSM (ODbL) credit. `elevation.py` samples per-node elevation:
+  `OpenTopoDataProvider` (EU-DEM 25 m over public HTTPS — the default;
+  hoehendaten.de's German DGM1 API sits on a firewalled port here) or
+  `RasterDGMProvider` (a local DGM GeoTIFF via rasterio, the roadmap's DGM1/
+  DGM200 path). `synthesize.py` turns the streets into a **branched gravity
+  network**: largest component → minimum spanning tree = the mains (so every
+  pipe is a cut edge → the loader's PRV/pump-cut-edge + reachability rules
+  hold), an **ext_grid source** on the high point sized so the whole zone
+  stays in the DVGW band, consumers on a node subset, PE d-series diameters.
+- **Two-step pipeline** (`snapshot.py`/`pipeline.py`/CLI): an ONLINE
+  `make_snapshot` freezes the projected streets + sampled elevations +
+  attribution to a pinned JSON; an OFFLINE, deterministic `build_from_snapshot`
+  rebuilds the bundle byte-for-byte with only networkx + the stdlib — the M8
+  acceptance ("builds offline-reproducibly from a pinned data snapshot"). The
+  heavy geo deps are ONLY the snapshot step (`tools/bundle_builder/
+  requirements.txt`); the build + tests need none, so CI rebuilds from the
+  committed snapshot without them.
+- **NEW `alpen` bundle** — the real Niederrhein town of **Alpen** (Ortskern):
+  182 junctions, 181 pipes, 126 consumers from real OSM streets + real EU-DEM
+  elevations (21–53 m). Solves clean (p_min 2.9 / p_max 5.9 bar, v_max 0.28
+  m/s, 0 violations). Registered (`character: "real"`). `scripts/build_alpen.py`
+  rebuilds it from the snapshot. `NetworkStructure` gained an optional
+  `attribution` field (TF §11); the map's Leaflet attribution control now
+  renders the OSM + Copernicus/EU-DEM credit ("attribution renders on map").
+
+**Tests: 237 backend + 23 vitest** (a clean confirmation run; the one earlier
+failure was the documented ambient-load perf flake — green in isolation);
+tsc + vite build green. 7 new builder
+tests (OFFLINE only — no osmnx needed): the snapshot is self-consistent + byte-
+stable, the build is deterministic + reproduces the committed files, the
+synthesised structure is a valid gravity tree with one ext_grid source, and
+the Alpen bundle loads/validates/solves in-band with **no alarm flood** (7
+builder tests + the Alpen geo-bbox pin).
+
+**Review:** the multi-agent adversarial review (3 lenses — pipeline /
+synthesis / integration — + per-finding verification) surfaced **9** confirmed
+findings, ALL fixed: (1, MAJOR) the flat Alpen village mesh is near-uniformly
+stagnant and re-flooded the Alarmzentrale with ~82 per-tick hygiene warnings —
+regressing the M4 alarm-flood fix on a shipped bundle → the per-pipe hygiene
+stagnation warning now folds into ONE fleet finding above a threshold (like
+self-cleaning; Alpen now peaks at 5 findings/tick), pinned by a new alarm-
+volume assertion; (2) `StreetNode.degree` was ~2× inflated (osmnx MultiDiGraph
+half-edges) so dead-ends were unrepresentable → degree from an undirected view
+(+ the committed snapshot's degrees recomputed offline); (3/6) the
+`RasterDGMProvider` no-data guard was a no-op for NaN / absent-nodata GeoTIFFs
+→ a finite + declared-nodata check; (4) the geodata attribution was parsed but
+never shown → surfaced on the `/network` wire + rendered on the map;
+(5) the Alpen test asserted zero violations but not warning volume → added;
+(7) a degenerate edge-less snapshot crashed with an opaque `max()` error →
+guarded; (8/9) two stale synthesiser comments corrected.
+
+**Deviation (documented):** elevation uses EU-DEM 25 m via OpenTopoData (the
+`RasterDGMProvider` DGM1 path is provided for local Länder tiles) because
+hoehendaten.de's DGM1 API is on a non-standard, firewalled port here — coarser
+(±2 m) but plenty to show terrain; the credit is honest (Copernicus/EU-DEM).
+The osmnx Overpass cache is gitignored. Alpen is a single gravity zone; the
+hilly Druckzonen town (which needs PRV zone-splitting — Neubeuern's 114 m
+relief demonstrates exactly why) comes with stage 2.
+
+- Next: **M8 stage 2** — the NetzStudio water **editor** (port `gridedit`'s
+  interactive-OSM editing for water: click-to-place junctions with
+  hoehendaten.de elevation, street-snapped pipe drawing, equipment, auto-
+  hydrants, live W 400-1 load-case checking, commission-to-bundle) + a hilly
+  Bavarian real-town bundle with real Druckzonen.

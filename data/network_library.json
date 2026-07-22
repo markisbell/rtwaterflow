@@ -32,6 +32,14 @@
    "nodes": 8,
    "pipe_km": 1.09,
    "dir": "networks/lauenau"
+  },
+  {
+   "id": "alpen",
+   "name": "Alpen (Ortskern, Geodaten)",
+   "character": "real",
+   "nodes": 182,
+   "pipe_km": 14.727,
+   "dir": "networks/alpen"
   }
  ]
 }

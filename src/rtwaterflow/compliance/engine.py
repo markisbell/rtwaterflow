@@ -64,6 +64,11 @@ P_REST_MAX_BAR = 10.0
 V_MAX_M_S = 2.0
 V_STAGNATION_M_S = 0.005
 V_SELF_CLEAN_M_S = 0.3
+#: above this many hour-mean-stagnant pipes the per-pipe hygiene warnings are
+#: folded into ONE fleet finding — a real village mesh (oversized branch mains
+#: on flat terrain) is near-uniformly stagnant, and one-per-pipe would drown
+#: the alarm center + bury a seeded anomaly (M8 review; mirrors self-cleaning)
+STAG_DETAIL_MAX = 6
 #: W 405 fire flow: minimum flow pressure at a drawing hydrant [bar], and
 #: the fraction of the target a hydrant must still deliver to "pass"
 P_FIRE_MIN_BAR = 1.5
@@ -249,6 +254,7 @@ class ComplianceEngine:
         hour = self.ticks_per_hour
         off_discharge = self._off_station_discharges(payload)
         no_self_clean: list[int] = []
+        stagnant: list[tuple[str, float, int]] = []   # (pid, hour_mean, since)
         for p in payload.get("pipes", []):
             pid = int(p["id"])
             v = abs(p.get("v_m_per_s") or 0.0)
@@ -286,14 +292,7 @@ class ComplianceEngine:
                 hour_mean = float(np.mean(st.v_day[-hour:]))
                 if hour_mean < V_STAGNATION_M_S:
                     st.stagnant += 1
-                    out.append(Finding(
-                        "warning", "DVGW W 400-1", "stagnation", "pipe",
-                        str(pid), value=round(hour_mean, 5),
-                        threshold=V_STAGNATION_M_S,
-                        since_ticks=st.stagnant,
-                        text_de=("Stagnation: mittlere Geschwindigkeit "
-                                 f"{_de(hour_mean * 1000, 1)} mm/s unter "
-                                 "dem Hygiene-Minimum von 5 mm/s")))
+                    stagnant.append((str(pid), hour_mean, st.stagnant))
                     continue
                 else:
                     st.stagnant = 0
@@ -301,6 +300,28 @@ class ComplianceEngine:
             # finding (the per-pipe flood drowned the alarm center)
             if len(st.v_day) >= day and max(st.v_day) < V_SELF_CLEAN_M_S:
                 no_self_clean.append(pid)
+        # hygiene stagnation: per-pipe detail while few, ONE fleet finding
+        # once a flat village mesh turns near-uniformly stagnant (M8 review)
+        if len(stagnant) <= STAG_DETAIL_MAX:
+            for pid_s, hour_mean, since in stagnant:
+                out.append(Finding(
+                    "warning", "DVGW W 400-1", "stagnation", "pipe", pid_s,
+                    value=round(hour_mean, 5), threshold=V_STAGNATION_M_S,
+                    since_ticks=since,
+                    text_de=("Stagnation: mittlere Geschwindigkeit "
+                             f"{_de(hour_mean * 1000, 1)} mm/s unter dem "
+                             "Hygiene-Minimum von 5 mm/s")))
+        else:
+            worst = min(hm for _, hm, _ in stagnant)
+            ids = [p for p, _, _ in stagnant]
+            out.append(Finding(
+                "warning", "DVGW W 400-1", "stagnation", "system", "hygiene",
+                value=float(len(stagnant)), threshold=V_STAGNATION_M_S,
+                text_de=(f"{len(stagnant)} Leitungen mit Stundenmittel unter "
+                         f"dem Hygiene-Minimum 5 mm/s (min "
+                         f"{_de(worst * 1000, 1)} mm/s; Leitungen: "
+                         + ", ".join(ids[:12])
+                         + ("…" if len(ids) > 12 else "") + ")")))
         if no_self_clean:
             out.append(Finding(
                 "warning", "DVGW W 400-1", "stagnation", "system",

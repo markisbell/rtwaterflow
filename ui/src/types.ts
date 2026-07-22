@@ -69,6 +69,9 @@ export interface Topology {
   stations: TopoStation[];
   steps_per_day: number;
   n_days: number;
+  /** geodata credit for OSM/DEM-built bundles (M8) — shown in the map's
+   *  attribution control; null for hand-authored synthetic bundles. */
+  attribution?: string[] | null;
 }
 
 // ---- GET /status (and every /control/* response) ------------------------------

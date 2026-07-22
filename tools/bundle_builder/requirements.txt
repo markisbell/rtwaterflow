@@ -1,0 +1,10 @@
+# Offline geodata bundle builder — heavy deps, ONLY for the ONLINE snapshot
+# step (fetch OSM + sample the DEM). The OFFLINE build (snapshot → bundle) and
+# the tests need only networkx (already a runtime dep) + the standard library,
+# so CI rebuilds a committed snapshot without installing any of this.
+#
+#   .venv\Scripts\pip install -r tools/bundle_builder/requirements.txt
+osmnx>=2.1
+rasterio>=1.4
+pyproj>=3.6
+geopandas>=1.0
