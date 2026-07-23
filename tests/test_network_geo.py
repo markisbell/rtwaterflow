@@ -33,6 +33,10 @@ EXPECTED_BBOX = {
     # on the hilly Inn valley in Upper Bavaria (449-527 m from EU-DEM, UTM33),
     # PRV-zoned across ~78 m of relief
     "neubeuern": (47.75, 47.81, 12.12, 12.17),
+    # Kevelaer (Stadtkern): the M9 city-scale performance bundle — REAL OSM
+    # streets on the flat Niederrhein (19-32 m from EU-DEM, UTM32), ~540
+    # junctions warm-solving well under 100 ms/tick
+    "kevelaer": (51.55, 51.60, 6.22, 6.27),
 }
 
 

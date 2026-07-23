@@ -1,0 +1,14 @@
+{
+ "supplies": [
+  {
+   "node": "n537",
+   "name": "Einspeisung Kevelaer (Stadtkern)",
+   "kind": "ext_grid",
+   "p_bar": 3.98
+  }
+ ],
+ "prvs": [],
+ "tanks": [],
+ "stations": [],
+ "wellfields": []
+}

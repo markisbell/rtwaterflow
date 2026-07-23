@@ -31,6 +31,9 @@ ALPEN_DIR = REPO_ROOT / "data" / "networks" / "alpen"
 NEUBEUERN_SNAPSHOT = (REPO_ROOT / "tools" / "bundle_builder" / "snapshots"
                       / "neubeuern.json")
 NEUBEUERN_DIR = REPO_ROOT / "data" / "networks" / "neubeuern"
+KEVELAER_SNAPSHOT = (REPO_ROOT / "tools" / "bundle_builder" / "snapshots"
+                     / "kevelaer.json")
+KEVELAER_DIR = REPO_ROOT / "data" / "networks" / "kevelaer"
 FILES = ("network_structure", "pipes", "consumers", "supply", "environment")
 
 #: the exact config the committed Alpen bundle was built with (keep in sync
@@ -42,6 +45,11 @@ NEUBEUERN_CFG = dict(network_id="neubeuern",
                      display_name="Neubeuern (Druckzonen)",
                      population=3000, enable_prv_zoning=True,
                      max_elevation_m=530.0)
+#: … and the committed Kevelaer (Stadtkern) perf bundle (scripts/build_kevelaer)
+KEVELAER_CFG = dict(network_id="kevelaer", display_name="Kevelaer (Stadtkern)",
+                    population=10000, enable_prv_zoning=False,
+                    material="GGG", dn_trunk=300, dn_branch=200,
+                    head_reserve_m=45.0)
 
 
 def _build():
@@ -50,6 +58,10 @@ def _build():
 
 def _build_neubeuern():
     return build_from_snapshot(NEUBEUERN_SNAPSHOT, SynthConfig(**NEUBEUERN_CFG))
+
+
+def _build_kevelaer():
+    return build_from_snapshot(KEVELAER_SNAPSHOT, SynthConfig(**KEVELAER_CFG))
 
 
 # --- the pinned snapshot -----------------------------------------------------
@@ -335,3 +347,46 @@ def test_zoning_caps_a_trapped_high_node_at_the_band(tmp_path):
             encoding="utf-8", newline="\n")
     sim = Simulator(load_network(out), make_settings(steps_per_day=96))
     assert min(sim.run_step(t, 0).summary["p_min_bar"] for t in range(12)) > 1.0
+
+
+# --- Kevelaer: the city-scale performance bundle (M9 stage 2) ----------------
+
+def test_kevelaer_build_is_deterministic_and_matches_committed():
+    """Byte-stability pin for the flat single-zone city bundle; reproduces the
+    committed data/networks/kevelaer files exactly."""
+    a, b = _build_kevelaer(), _build_kevelaer()
+    assert a.files() == b.files()
+    built = a.files()
+    for fname in FILES:
+        fresh = (json.dumps(built[fname], indent=1, ensure_ascii=False) + "\n")
+        committed = (KEVELAER_DIR / f"{fname}.json").read_text("utf-8")
+        assert fresh.replace("\r\n", "\n") == committed.replace("\r\n", "\n"), \
+            f"{fname}.json drifted from the builder"
+
+
+def test_kevelaer_is_a_city_scale_single_zone_gravity_net():
+    """>= 500 junctions (the roadmap's city-scale bar), one ext_grid source, no
+    Druckminderer (a flat town is a single gravity zone), ductile-iron mains, and
+    it solves in-band with no alarm flood."""
+    inputs = load_network(KEVELAER_DIR)
+    n = len(inputs.structure.junctions)
+    assert n >= 500                                   # city-scale
+    assert len(inputs.pipes.pipes) == n - 1           # spanning tree, no PRVs
+    assert not inputs.supply.prvs
+    supplies = inputs.supply.supplies
+    assert len(supplies) == 1 and supplies[0].kind == "ext_grid"
+    assert all(p.material == "GGG" for p in inputs.pipes.pipes)   # city mains
+    sim = Simulator(inputs, make_settings(steps_per_day=96))
+    p_min, p_max, statuses, worst_viol, worst_findings = [], [], set(), 0, 0
+    for t in range(0, 96, 8):                         # sample the day (fast)
+        r = sim.run_step(t, 0)
+        statuses.add(r.solver_status)
+        p_min.append(r.summary["p_min_bar"])
+        p_max.append(max(j["p_bar"] for j in r.junctions))
+        worst_viol = max(worst_viol, sum(
+            1 for f in r.findings if f["severity"] == "violation"))
+        worst_findings = max(worst_findings, len(r.findings))
+    assert statuses <= {"ok", "degraded"}
+    assert min(p_min) > 2.0 and max(p_max) < 8.0
+    assert worst_viol == 0
+    assert worst_findings <= 6, f"alarm flood: {worst_findings} findings/tick"

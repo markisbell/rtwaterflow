@@ -1037,3 +1037,51 @@ as out-of-scope) was fixed anyway — the Dockerfile installs only requirements.
 
 - Next: **M9 stage 2** — the city-scale performance pass (a ≥ 500-junction bundle
   warm-solving < 100 ms/tick).
+
+### 2026-07-23 — M9 stage 2: city-scale performance bundle
+
+**Built** — the roadmap's performance bar (≥ 500 junctions warm-solving < 100 ms/
+tick) as a shipped bundle + a regression test. NO synthesiser code changed —
+only existing `SynthConfig` knobs were set.
+
+- **NEW `kevelaer` bundle** — the compact, flat centre of the Niederrhein
+  pilgrimage town of **Kevelaer** from real OSM + EU-DEM: **544 junctions**, 543
+  pipes, 367 consumers, single gravity zone. A flat town has ~no gravity relief,
+  so a village's PE DN110 branches cannot carry a town's throughput in-band over
+  the longer 544-node tree — the bundle uses city-grade **GGG DN200/300** mains +
+  a 45 m head reserve, landing p_min 4.30 / p_max 5.24 bar (the 4–6 band),
+  0 violations, ≤ 2 findings/tick. `scripts/build_kevelaer.py` rebuilds it
+  offline-deterministically from the pinned `--bbox` snapshot; registered
+  (`character: "real"`).
+- **NEW `tests/test_performance.py`** — warm run_step median-of-20 (after 5 warm-
+  up steps) **< 100 ms with the M7 observer OFF** (the observer deep-copies +
+  re-solves a twin, an optional estimation overlay, not part of the hydraulic-
+  solve budget). Measured on this host: **est-off median ~37 ms, max ~59 ms** over
+  a day — comfortably inside the bar. The DEFAULT engine (observer ON) medians
+  ~73 ms but is heavy-tailed (deep-copy GC), occasionally exceeding 100 ms — the
+  observer self-throttles and is a separate concern from the hydraulic-engine bar.
+  Per-tick cost is dominated by the pipeflow-call count (retry-ladder tiers), not
+  junction count, so a clean tier-1 net stays fast at scale.
+
+**Tests: 268 backend + 36 vitest** (+4: perf, kevelaer byte-stability + city-
+scale structure, kevelaer geo-placement); Alpen + Neubeuern still byte-identical
+(the config knobs are per-bundle).
+
+**Review:** the multi-agent adversarial review (2 lenses — perf-test honesty /
+bundle validity — + verification) surfaced **1** confirmed finding (+1 refuted),
+fixed. (MAJOR) the perf test's docstring claimed it "fails on a real regression
+(a second solver tier per tick)" — but the verifier reproduced that exact
+regression (forcing a second tier every tick) and the median rose only 35 → 51 ms
+(≈60 % of the est-off step is fixed overhead — collect_physics, compliance, wire
+build — so doubling only the ~14 ms solve is a ~1.5× step change), still passing
+< 100 ms → the docstring is now honest: this is an ACCEPTANCE test of the roadmap
+bar (a regression large enough to BREACH 100 ms fails; smaller ones are within
+spec), not a tight micro-benchmark. The refuted finding claimed the default
+(observer-on) tick breaches 100 ms and so the est-off framing is dishonest —
+refuted because the observer is a legitimately separate optional overlay and its
+own tail is not the hydraulic-engine bar; the docstring now states the est-on
+median (~73 ms) and heavy tail honestly regardless.
+
+- Next: **M9 stage 3** — docs + scenario walkthroughs (bringing the Benutzerhand-
+  buch/README up to M8/M9 + German scenario walkthroughs with expected
+  observations), which closes M9 and the build.

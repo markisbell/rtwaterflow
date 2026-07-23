@@ -48,6 +48,14 @@
    "nodes": 215,
    "pipe_km": 26.762,
    "dir": "networks/neubeuern"
+  },
+  {
+   "id": "kevelaer",
+   "name": "Kevelaer (Stadtkern, Geodaten)",
+   "character": "real",
+   "nodes": 544,
+   "pipe_km": 47.033,
+   "dir": "networks/kevelaer"
   }
  ]
 }
