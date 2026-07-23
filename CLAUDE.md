@@ -1117,15 +1117,21 @@ nodes / 4.3–5.2 bar / ~37 ms; EPANET < 0.001 bar).
 no other test reads these files).
 
 **Review:** the multi-agent adversarial review (2 lenses — factual accuracy /
-consistency + honesty — + verification) surfaced **2** confirmed findings, both
+consistency + honesty — + verification) surfaced **3** confirmed findings, all
 fixed. (MAJOR) the README's front-page STATUS blockquote (separate from the
 badge I'd updated) still read "Status: M6 complete … M7 is next … the Schätzung
 view is stubbed, produces no estimate" → rewritten to M0–M9 complete with the
-observer live. (MINOR) the Benutzerhandbuch attributed the nightly pool backwash
-to DVGW W 410 → it is DIN 19643 (W 410 is the demand envelope) → corrected. All
-the walkthrough numbers the accuracy lens spot-checked (tutorial 5.78 bar +
-highest-node Schlechtpunkt, musterdorf 2.8 bar PRV, neubeuern 6 Druckminderer,
-kevelaer 544/4.3–5.2 bar, EPANET < 0.001 bar) verified correct.
+observer live. (MAJOR) the Alpen walkthrough cited "v_max 0,28 m/s, 2,9–5,9 bar"
+— which is the midnight tick-0 (min-demand) snapshot, NOT the day: the true
+daily peak velocity is ~0,87 m/s (3× higher, still well under 2,0 m/s) and
+p_min dips to 2,78 bar; the two sibling geodata walkthroughs correctly use their
+daily bands → Alpen now cites the daily band + morning-peak velocity to match
+(the tick-0 mislabel traces back to the M8-stage-1 dev-log's Alpen line). (MINOR)
+the Benutzerhandbuch attributed the nightly pool backwash to DVGW W 410 → it is
+DIN 19643 (W 410 is the demand envelope) → corrected. The other walkthrough
+numbers verified correct (tutorial 5.78 bar + highest-node Schlechtpunkt,
+musterdorf 2.8 bar PRV, neubeuern 6 Druckminderer, kevelaer 544/4.3–5.2 bar daily,
+EPANET < 0.001 bar).
 
 **M9 — and the M0–M9 build — complete.** Optional roadmap stretch items not
 built (documented as deferred): a live water-age post-processing layer, a STANET

@@ -190,8 +190,9 @@ Netzpumpe fällt bei Trockenlauf aus, der Hochbehälter entleert sich — die
 Haushalte fallen trocken (PDA). Am Normaltag: 0,385 kWh/m³. *Lehrpunkt:* die
 Kette Grundwasser → Brunnen → Behälter → Netz und wo sie reißt.
 
-**Alpen — reales flaches Netz.** *Beobachtung:* 182 echte Knoten, Drücke
-2,9–5,9 bar, v_max 0,28 m/s, keine Verletzungen; auf der Karte der OSM-/
+**Alpen — reales flaches Netz.** *Beobachtung:* 182 echte Knoten, Drücke über
+den Tag ~2,8–5,9 bar, Spitzengeschwindigkeit ~0,87 m/s in der Morgenspitze
+(weit unter der 2,0-m/s-Warnung), keine Verletzungen; auf der Karte der OSM-/
 EU-DEM-Quellennachweis. *Lehrpunkt:* aus echten Straßen + DGM synthetisierte,
 solide Netze.
 
