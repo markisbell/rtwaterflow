@@ -1085,3 +1085,48 @@ median (~73 ms) and heavy tail honestly regardless.
 - Next: **M9 stage 3** — docs + scenario walkthroughs (bringing the Benutzerhand-
   buch/README up to M8/M9 + German scenario walkthroughs with expected
   observations), which closes M9 and the build.
+
+### 2026-07-23 — M9 stage 3: docs + scenario walkthroughs (closes M9)
+
+The final stage: bring the user-facing docs from their stale M0 state to M9 and
+add the roadmap's scenario walkthroughs. **This closes M9 and the M0–M9 build.**
+
+- **`docs/Benutzerhandbuch.md`** (served in-app at `/manual`) — full German
+  rewrite, 7 → 15 sections. The five files now describe the whole feature set;
+  a network-library table (the 7 bundles); the Schätzung view is the M7 digital-
+  twin observer (with its honesty limits spelled out); new sections for the
+  Alarmzentrale (M4), events + PDA (M5), tanks/pumps/Brunnen (M2/M6), the demand
+  engine (M3) and the NetzStudio editor (M8); a **Szenarien-Rundgänge** section
+  — a per-bundle walkthrough (what to do / what you see / why) for all seven
+  bundles, the roadmap's M9 didactic deliverable; a validation section; and the
+  Grenzen section corrected — the M0 limits (fixed demand, no tank dynamics) are
+  LIFTED (PDA, tanks/pumps, wells, the observer are all active), leaving the
+  genuine ones (quasi-static, no PRV state machine, no water quality, non-
+  deterministic observer). The strings the `/manual` test pins are preserved.
+- **`README.md`** — catalog 4 → 7 bundles (3 real-geodata), the estimation view
+  is the digital-twin observer (was "wired but disabled"), the geodata builder +
+  editor listed, EPANET Net1/Net3 + WNTR-PDD rows added to the Validation table,
+  test counts 209 → 268 / 23 → 36, status badge M6 → M9 complete.
+
+Every walkthrough number was verified against the shipped bundles / dev-log
+before writing (tutorial 5.78 bar + highest-node Schlechtpunkt; musterdorf PRV
+2.8 bar; mustertal control band 1.2/3.4; neubeuern 6 Druckminderer; kevelaer 544
+nodes / 4.3–5.2 bar / ~37 ms; EPANET < 0.001 bar).
+
+**Tests: 268 backend + 36 vitest** (docs-only stage — the `/manual` test passes;
+no other test reads these files).
+
+**Review:** the multi-agent adversarial review (2 lenses — factual accuracy /
+consistency + honesty — + verification) surfaced **2** confirmed findings, both
+fixed. (MAJOR) the README's front-page STATUS blockquote (separate from the
+badge I'd updated) still read "Status: M6 complete … M7 is next … the Schätzung
+view is stubbed, produces no estimate" → rewritten to M0–M9 complete with the
+observer live. (MINOR) the Benutzerhandbuch attributed the nightly pool backwash
+to DVGW W 410 → it is DIN 19643 (W 410 is the demand envelope) → corrected. All
+the walkthrough numbers the accuracy lens spot-checked (tutorial 5.78 bar +
+highest-node Schlechtpunkt, musterdorf 2.8 bar PRV, neubeuern 6 Druckminderer,
+kevelaer 544/4.3–5.2 bar, EPANET < 0.001 bar) verified correct.
+
+**M9 — and the M0–M9 build — complete.** Optional roadmap stretch items not
+built (documented as deferred): a live water-age post-processing layer, a STANET
+importer, and pySIMDEUM showcase profiles (§6 M9 "optional").

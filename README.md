@@ -3,7 +3,7 @@
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![AI-generated](https://img.shields.io/badge/source-AI--generated-8A2BE2)
 ![engine](https://img.shields.io/badge/engine-pandapipes%200.14.0-brightgreen)
-![status](https://img.shields.io/badge/milestone-M6%20%2F%20M9-orange)
+![status](https://img.shields.io/badge/milestone-M9%20complete-brightgreen)
 
 > [!NOTE]
 > **AI-generated code.** The source code, tests and documentation of this
@@ -36,10 +36,11 @@ mirrors its architecture. [CLAUDE.md](CLAUDE.md) is the development log,
 (`TECHNICAL_FOUNDATIONS.md`, verified DVGW/DIN constraints) live in the parent
 research project.
 
-> **Status: M6 complete** (wells & aquifer / the Lauenau drought cascade) on
-> branch `m0-fork-strip`; **M7 — observability** is next. The estimation
-> (Schätzung) view is wired end-to-end but **stubbed** — it produces no
-> estimate yet; the forward observer lands in M7.
+> **Status: M0–M9 complete** on branch `m0-fork-strip` — the full build: hydraulic
+> core, tanks/pumps/zones, demand engine, compliance, PDA/emitters, wells &
+> aquifer, the M7 forward-observer estimation, the M8 geodata bundle builder +
+> NetzStudio editor, and M9 validation (EPANET/WNTR cross-checked) + docs. The
+> estimation (Schätzung) view is a live digital-twin observer.
 
 ## The three applications
 
@@ -55,18 +56,27 @@ parallel on one machine. `stop_rtwaterflow.bat` tears everything down again.)
 
 ## What it can do
 
-- **Network catalog**: four teaching bundles (`tutorial_hillside`, the
-  pandapipes height-difference tutorial rebuilt as a five-file bundle;
-  `musterdorf`, a 35-node two-pressure-zone showcase with a full archetype
-  demand mix, PRV, tank and pump; `mustertal`, a counter-tank / Wasserturm net
-  whose transport segment reverses sign over the day; `lauenau`, a wells +
-  aquifer + break-tank net geo-anchored to the real town and its 2020 water
-  emergency) — or import your own five-file bundle. All coordinates are real
-  WGS84; three of the four are synthetic teaching layouts.
+- **Network catalog**: seven teaching bundles — four synthetic layouts
+  (`tutorial_hillside`, the pandapipes height-difference tutorial rebuilt as a
+  five-file bundle; `musterdorf`, a 35-node two-pressure-zone showcase with a
+  full archetype demand mix, PRV, tank and pump; `mustertal`, a counter-tank /
+  Wasserturm net whose transport segment reverses sign over the day; `lauenau`,
+  a wells + aquifer + break-tank net geo-anchored to the real town and its 2020
+  water emergency) plus three **real-geodata** bundles built offline from OSM +
+  EU-DEM (`alpen`, a flat 182-node Niederrhein town; `neubeuern`, a hilly
+  215-node Inn-valley town with genuine PRV **Druckzonen** across ~78 m of
+  relief; `kevelaer`, a ~540-node city-scale performance net) — or import your
+  own five-file bundle. All coordinates are real WGS84.
 - **Three parallel views** on Leaflet/OSM maps with DVGW-anchored color layers:
   node pressure (traffic-light around the W 400-1 storey minimum), flow
   velocity, tank levels. The measured view (Gemessen) shows metered elements
-  only; the estimation view (Schätzung) is wired but disabled (see status).
+  only; the estimation view (Schätzung) is a **digital-twin observer** — a
+  second net reconstructed from operator SCADA + demand priors, so an anomaly at
+  an unmetered node stays invisible in the estimate.
+- **Geodata bundle builder + NetzStudio editor**: an offline `tools/bundle_builder`
+  (osmnx street graph + EU-DEM elevation → a synthesised gravity network,
+  reproducible from a pinned snapshot) and an in-app editor that draws a network
+  on real streets with live W 400-1 load-case checking before commissioning.
 - **Measurement layer**: place water meters (Wasserzähler, `mdot`+`p`) and node
   pressure sensors, with presets, live vs 15-minute fidelity and honest cold
   starts; strict mode (`EXPOSE_GROUND_TRUTH=false`) withholds the reality layer
@@ -212,8 +222,8 @@ reachability, no isolated nodes, PRV and pump stations as cut edges):
 ## Tests
 
 ```
-.venv\Scripts\python -m pytest tests -q         # backend: 209 tests
-cd ui && npm run build && npx vitest run        # tsc strict build + 23 unit tests
+.venv\Scripts\python -m pytest tests -q         # backend: 268 tests
+cd ui && npm run build && npx vitest run        # tsc strict build + 36 unit tests
 ```
 
 ## Validation
@@ -228,8 +238,10 @@ development-log evidence.
 
 | Check | Oracle / reference | Result |
 |---|---|---|
+| Full network hydraulics | **EPANET/WNTR** — the standard **Net1** (9 j) + **Net3** (92 j) rebuilt with `swamee-jain` | node pressures within **< 0.001 bar**, link flows within **~0.5 %** of WNTR's EpanetSimulator on the identical D-W network (`tests/validation/`) |
 | Elevation head (`tutorial_hillside`) | the pandapipes height-difference tutorial | ext-grid 0.5 bar @ 400 m → **5.78 bar** at the 346 m consumer; junction pressures pinned to the baselined Colebrook solution within **±0.01 bar** (agrees with the upstream Nikuradse tutorial to ±0.02 bar) |
 | Hydrant fire flow | **EPANET/WNTR** emitter (D-W, exponent 0.5) | hydrant node pressure within **±0.1 bar** across comfortable/marginal/crater cases; the W 405 ≥ 1.5 bar verdict agrees |
+| Pressure-driven demand | **WNTR** Wagner PDD | the M5 PDA curve matches WNTR's delivered fraction within **0.001** across the band |
 | Tank level dynamics | **EPANET/WNTR** tank | level-rate error vs EPANET **median < 1 cm/tick, p75 < 3 cm/tick** in state-matched ticks |
 | Demand envelope | DVGW **W 410** `f_d`/`f_h` | a synthetic residential year lands within **±20 %** of `f_d = 3.9·E^−0.0752` and `f_h = 18.1·E^−0.1682` |
 | Mass balance | conservation | Musterdorf `|balance_err|/feed < 0.1 %`; demand = delivered to 1e-6 kg/s |
