@@ -991,3 +991,49 @@ designed over the band. Neubeuern is byte-identical after the cap fix (its p_out
 values were already ≤ 4.55 bar).
 
 - Next: **M9 — validation hardening + docs** (roadmap §6), the final milestone.
+
+### 2026-07-23 — M9 stage 1: EPANET/WNTR cross-validation suite
+
+M9 (the final milestone) is staged: **stage 1 (this entry) — the EPANET/WNTR
+cross-validation suite** (roadmap §7.2, the publishable claim the pandapipes
+paper leaves open); stage 2 — the city-scale performance pass; stage 3 — docs +
+scenario walkthroughs.
+
+**Built** — `tests/validation/test_epanet_crossvalidation.py` (6 tests, new
+`tests/validation/` package): rebuilds the two canonical EPANET example networks
+WNTR ships — **Net1** (9 junctions) and **Net3** (92) — as gravity nets (every
+reservoir + tank fixed at its EPANET head, pumps omitted — pandapipes models a
+pump as a constant-lift std_type OUTSIDE the Newton solve, `StationLiftStdType`,
+so it is not an apples-to-apples EPANET element; a direct-pump rebuild gave ~6 bar
+error at the discharge; the pump+tank CONTROL loop is cross-validated by the M2
+`test_tank_oracle`), solves them with pandapipes `friction_model="swamee-jain"`
+(Darcy-Weisbach), and compares node pressures + link flows against WNTR's
+EpanetSimulator on the IDENTICAL network. Results: **pressures within 0.0002 bar,
+flows within 0.5 %** — both far inside the roadmap bar (0.05 bar / ~1.5 %). Plus:
+a §8-pitfall pin (the `swamee_jain` underscore typo silently falls back to
+nikuradse) and a PDA-curve-vs-WNTR-PDD check (Wagner within 0.001).
+
+- **wntr** was undeclared (the existing oracles would silently skip in CI); added
+  to the pyproject `dev` extra (test-only, out of the runtime Docker image).
+
+**Tests: 264 backend + 36 vitest** (+6 validation); the suite writes no repo
+artifacts (EPANET temp files routed to a TemporaryDirectory, not the CWD).
+
+**Review:** the multi-agent adversarial review (2 lenses — scientific validity /
+correctness — + per-finding verification) surfaced **3** confirmed findings, all
+fixed. (1, MAJOR) the pitfall test proved the silent fallback HAPPENS but not that
+it is HARMFUL — the fallback (nikuradse) matches EPANET *pressures* within 0.05 bar
+too (the pressure field is hydrostatics-dominated, friction-insensitive), so the
+material harm shows only in FLOWS → the test now asserts the fallback's Net3 flow
+error (~14 %) blows the 1.5 % bar the correct model (~0.5 %) passes. (2, MINOR) the
+pressure tests are friction-model-insensitive by nature → docstrings now state the
+pressure field validates the D-W solve + hydrostatics generically while the FLOW
+test carries friction-model fidelity. (3, MINOR) the pressure comparison used the
+nominal ρ·g/1e5 (0.09792 bar/m) to convert EPANET head, ~0.1 % off pandapipes'
+own gradient (0.09780), a water-property convention offset → now converts with
+pandapipes' EMPIRICAL static gradient, so the comparison is the hydraulic head
+(residual 0.0002 bar, not 0.01). The wntr-in-requirements placement (review-refuted
+as out-of-scope) was fixed anyway — the Dockerfile installs only requirements.txt.
+
+- Next: **M9 stage 2** — the city-scale performance pass (a ≥ 500-junction bundle
+  warm-solving < 100 ms/tick).

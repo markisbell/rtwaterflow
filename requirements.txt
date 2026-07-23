@@ -10,3 +10,5 @@ uvicorn[standard]>=0.29
 pydantic>=2.6
 pydantic-settings>=2.2
 httpx>=0.27               # M8 editor: Overpass/Nominatim/DEM proxies (also FastAPI TestClient)
+# wntr (M9 EPANET cross-validation + tank/hydrant oracles) is TEST-ONLY → it lives in
+# pyproject [project.optional-dependencies].dev, kept out of the runtime Docker image

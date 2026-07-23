@@ -21,7 +21,9 @@ dependencies = [
 
 [project.optional-dependencies]
 # httpx2: starlette >= 1.3 TestClient prefers it over httpx (deprecation)
-dev = ["pytest>=8.0", "httpx>=0.27", "httpx2"]
+# wntr: EPANET cross-validation + tank/hydrant oracles (test-only, importorskip-
+# gated); belongs here NOT in requirements.txt so it stays out of the runtime image
+dev = ["pytest>=8.0", "httpx>=0.27", "httpx2", "wntr>=1.5"]
 
 [project.scripts]
 rtwaterflow = "rtwaterflow.main:main"
