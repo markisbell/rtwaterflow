@@ -1,0 +1,51 @@
+{
+ "supplies": [
+  {
+   "node": "n179",
+   "name": "Einspeisung Neubeuern (Druckzonen)",
+   "kind": "ext_grid",
+   "p_bar": 0.93
+  }
+ ],
+ "prvs": [
+  {
+   "from_node": "n2",
+   "to_node": "n109",
+   "name": "Druckminderer n109",
+   "p_out_bar": 4.02
+  },
+  {
+   "from_node": "n12",
+   "to_node": "n134",
+   "name": "Druckminderer n134",
+   "p_out_bar": 3.0
+  },
+  {
+   "from_node": "n12",
+   "to_node": "n158",
+   "name": "Druckminderer n158",
+   "p_out_bar": 4.55
+  },
+  {
+   "from_node": "n132",
+   "to_node": "n131",
+   "name": "Druckminderer n131",
+   "p_out_bar": 3.0
+  },
+  {
+   "from_node": "n177",
+   "to_node": "n38",
+   "name": "Druckminderer n38",
+   "p_out_bar": 3.0
+  },
+  {
+   "from_node": "n199",
+   "to_node": "n8",
+   "name": "Druckminderer n8",
+   "p_out_bar": 3.09
+  }
+ ],
+ "tanks": [],
+ "stations": [],
+ "wellfields": []
+}

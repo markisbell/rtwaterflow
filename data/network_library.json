@@ -40,6 +40,14 @@
    "nodes": 182,
    "pipe_km": 14.727,
    "dir": "networks/alpen"
+  },
+  {
+   "id": "neubeuern",
+   "name": "Neubeuern (Druckzonen, Geodaten)",
+   "character": "real",
+   "nodes": 215,
+   "pipe_km": 26.762,
+   "dir": "networks/neubeuern"
   }
  ]
 }

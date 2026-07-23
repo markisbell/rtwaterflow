@@ -912,3 +912,82 @@ the Katalog↔Editor toggle (state lifted); (minor) the Overpass loop hardened.
 
 - Next: **M8 stage 2c** — the hilly Bavarian Druckzonen bundle (PRV
   zone-splitting in the synthesiser). That closes M8.
+
+### 2026-07-23 — M8 stage 2c: hilly Druckzonen bundle (PRV zone-splitting)
+
+Stage 2c closes M8: the offline geodata synthesiser gains **PRV zone-splitting**,
+and a second real-town bundle — the hilly Upper-Bavarian **Neubeuern** — ships as
+the Druckzonen showcase (Alpen was the flat single-zone one).
+
+**Built** (roadmap §6 M8, TF §2/§11):
+
+- **`synthesize.py` zone-splitting** (`SynthConfig.enable_prv_zoning`, OFF by
+  default so the flat path — Alpen — stays byte-identical): on a hilly town one
+  gravity zone would drive the deep streets far above PN 10, so the synthesiser
+  splits the tree into **Druckzonen** with Druckminderer (`press_control` cut
+  edges). Three pieces:
+  - **`_descent_tree`** — when zoning, the mains are grown as a *gravity descent
+    tree* from the source (attach the HIGHEST-elevation frontier node next, via
+    its shortest street edge), so nodes are added top-down and a zone is a
+    coherent elevation band, NOT the wandering cut a length-MST makes across a
+    flat valley mesh (the length-MST + zoning first gave 25 spurious valves; the
+    descent tree gives 6 clean ones). The flat path keeps the length-MST.
+  - **`_assign_zones`** — walk the tree from the source; where a child's static
+    pressure `(head−elev)·BAR_PER_M` would exceed `pn_max_bar` (7 bar, under the
+    8 bar Ruhedruck warning / PN 10), insert a Druckminderer and reset the
+    child's zone head to serve the TALLEST node of that subtree (+ the head
+    reserve) — the no-starvation guarantee: even though the mains tree follows
+    street length, a branch that dips below a valve then climbs back up still
+    gets pressure. The outlet pressure is CAPPED at `pn_max_bar` so no node is
+    ever *designed* above the band (review fix, below), floored at
+    `zone_reset_bar`; a reducer never raises head.
+  - **`max_elevation_m`** drops street nodes above the distribution area — a
+    municipality boundary sweeps in forested-summit / Schloss access roads
+    (Neubeuern's Gemeinde reaches a 563 m castle) that are not real mains.
+- **NEW `neubeuern` bundle** — the real Markt Neubeuern (Inn valley, Lkr.
+  Rosenheim): 215 junctions, 208 pipes, **6 Druckminderer**, 143 consumers, from
+  real OSM streets + real EU-DEM elevations capped at 530 m (449–527 m, ~78 m of
+  relief). Source (Hochbehälter) on the 527 m high point; the upper town
+  (472–527 m) is the source zone, the valley (458–465 m) is fed through 6 PRV
+  stations reducing to 3.0–4.55 bar — a textbook two-tier Druckzonen layout.
+  Solves clean (p_min 2.5 / p_max 6.8 bar, 0 violations, ≤2 findings/tick).
+  Registered (`character: "real"`); `scripts/build_neubeuern.py` rebuilds it
+  offline from the pinned snapshot. UTM33 (12.14 °E is just into zone 33). The
+  snapshot was frozen online once from the whole Gemeinde boundary (which
+  carries the 114 m castle relief); the committed build is offline +
+  deterministic from it, like Alpen.
+
+**Tests: 258 backend + 36 vitest** (+7 stage-2c builder tests); tsc + vite build
+green; Alpen rebuilds byte-identically (the flag-off path is untouched). The new
+tests pin: the zoned build is deterministic + reproduces the committed files;
+it is a zoned gravity tree (pipes + PRVs = n−1, so every valve is a cut edge;
+each PRV feeds downhill and reduces to a 2–8 bar band); it solves in-band with
+no alarm flood; it meets the peak load cases (LF1/LF2) but not the W 405 fire
+case at its worst, highest, farthest point (LF3 — like musterdorf/lauenau, the
+teaching insight); zoning is a no-op on a flat town; a synthetic 120 m-relief
+tree splits into multiple zones and never starves a node it sits above; and the
+trapped-high-node case (below) holds the band ceiling without over-pressurising.
+
+**Review:** the multi-agent adversarial review (2 lenses — numerics/determinism,
+integration/domain — + per-finding verification) surfaced **2** real findings,
+both fixed (the automated confirmed/refuted tally was muddied because the fix
+landed WHILE the review ran — the refutations read the already-capped code and
+independently validated it). (1, MAJOR) the subtree-serving zone reset could
+DESIGN a Druckminderer outlet ABOVE PN 10 — a "trapped" high node (one the
+descent tree can only reach through a lower node, e.g. a dell that then climbs
+to a knoll) made `max_sub[c]` far above `c`, so the un-capped `p_out` for the
+dell ran to ~10.3 bar (repro: source 545 → dell 440 → knoll 515), and the
+"split again deeper" claim was false because a reducer can never raise head →
+the outlet pressure is now CAPPED at `pn_max_bar`, which (with the pn_max split)
+bounds EVERY zone at ≤ 7 bar for all towns while still serving any trapped node
+within one PN-band of relief above its feed; a knoll further above than
+single-source gravity can physically reach is now honestly UNDER-pressured (a
+truthful compliance finding — it needs a booster) instead of fake-over-PN.
+(2, MAJOR) the synthetic zoning tests used only strictly-monotone-descending
+streets, so they never exercised the over-serve path and gave false confidence
+in the PN bound → a new trapped-node test (a dell feeding a 47 m-taller knoll)
+now pins that the cap engages (two PRVs capped to exactly 7.0) and no node is
+designed over the band. Neubeuern is byte-identical after the cap fix (its p_out
+values were already ≤ 4.55 bar).
+
+- Next: **M9 — validation hardening + docs** (roadmap §6), the final milestone.

@@ -1,0 +1,1434 @@
+{
+ "consumers": [
+  {
+   "node": "n0",
+   "name": "Innstraße (n0)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n2",
+   "name": "Samerstraße (n2)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n4",
+   "name": "n4",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n6",
+   "name": "Marktplatz (n6)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n8",
+   "name": "Am Gasteig (n8)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n10",
+   "name": "Schloßstraße (n10)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n11",
+   "name": "Am Bürgl (n11)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n13",
+   "name": "Dorfstraße (n13)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n15",
+   "name": "Samerstraße (n15)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n17",
+   "name": "Eichendorffstraße (n17)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n19",
+   "name": "Lippnstraße (n19)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n21",
+   "name": "Rauwöhrstraße (n21)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n23",
+   "name": "n23",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n25",
+   "name": "Rosenheimer Straße (n25)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n27",
+   "name": "Auerstraße (n27)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n28",
+   "name": "Auerstraße (n28)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n30",
+   "name": "Auerstraße (n30)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n31",
+   "name": "Auerstraße (n31)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n33",
+   "name": "Pinswang (n33)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n34",
+   "name": "Pinswang (n34)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n36",
+   "name": "Holzham (n36)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n38",
+   "name": "Sollach (n38)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n39",
+   "name": "Elandstraße (n39)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n40",
+   "name": "Elandstraße (n40)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n42",
+   "name": "Elandstraße (n42)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n44",
+   "name": "Marktfeldstraße (n44)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n46",
+   "name": "Findlingstraße (n46)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n48",
+   "name": "Marktfeldstraße (n48)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n49",
+   "name": "Steinbrennerstraße (n49)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n51",
+   "name": "Rauwöhrstraße (n51)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n53",
+   "name": "Am Birbet (n53)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n54",
+   "name": "Degenfeldstraße (n54)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n55",
+   "name": "Feldhüterstraße (n55)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n57",
+   "name": "Auerstraße (n57)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n59",
+   "name": "Sesslweg (n59)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n60",
+   "name": "n60",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n61",
+   "name": "Winkl (n61)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n62",
+   "name": "n62",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n64",
+   "name": "Anger (n64)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n65",
+   "name": "n65",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n67",
+   "name": "Petersbergstraße (n67)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n69",
+   "name": "Eggerweg (n69)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n71",
+   "name": "Rosenheimer Straße (n71)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n73",
+   "name": "Mitterstraße (n73)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n75",
+   "name": "Mitterstraße (n75)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n76",
+   "name": "Brünnsteinstraße (n76)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n78",
+   "name": "Roßwöhrstraße (n78)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n79",
+   "name": "Rosenheimer Straße (n79)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n81",
+   "name": "Roßwöhrstraße (n81)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n82",
+   "name": "Gartenstraße (n82)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n83",
+   "name": "Wendelsteinstraße (n83)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n85",
+   "name": "Innstraße (n85)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n87",
+   "name": "Haimgartenstraße (n87)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n88",
+   "name": "Rupertistraße (n88)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n89",
+   "name": "Landerstraße (n89)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n91",
+   "name": "Landerstraße (n91)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n93",
+   "name": "Virgilstraße (n93)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n95",
+   "name": "Hiererweg (n95)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n96",
+   "name": "n96",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n98",
+   "name": "Winkl (n98)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n99",
+   "name": "Kundlerweg (n99)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n100",
+   "name": "Rassnweg (n100)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n101",
+   "name": "Ulmenstraße (n101)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n102",
+   "name": "Ulmenstraße (n102)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n104",
+   "name": "Eichenstraße (n104)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n106",
+   "name": "Schopperstraße (n106)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n108",
+   "name": "Brünnsteinstraße (n108)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n110",
+   "name": "Eichenstraße (n110)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n112",
+   "name": "Eichenstraße (n112)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n113",
+   "name": "Pfaffensteinstraße (n113)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n115",
+   "name": "Am Gereut (n115)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n116",
+   "name": "Am Gereut (n116)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n117",
+   "name": "Am Gereut (n117)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n119",
+   "name": "Am Gereut (n119)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n120",
+   "name": "Frühlingstraße (n120)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n122",
+   "name": "Herbststraße (n122)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n123",
+   "name": "Am Bürgl (n123)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n124",
+   "name": "Landerstraße (n124)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n125",
+   "name": "Landerstraße (n125)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n126",
+   "name": "Landerstraße (n126)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n127",
+   "name": "Georg-Wiesböck-Ring (n127)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n129",
+   "name": "Georg-Wiesböck-Ring (n129)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n131",
+   "name": "Georg-Wiesböck-Ring (n131)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n133",
+   "name": "Georg-Wiesböck-Ring (n133)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n135",
+   "name": "Rauwöhrstraße (n135)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n137",
+   "name": "Am Sportplatz (n137)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n138",
+   "name": "Mitterstraße (n138)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n139",
+   "name": "Wendelsteinstraße (n139)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n140",
+   "name": "Soinweg (n140)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n141",
+   "name": "Lichtfeld (n141)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n143",
+   "name": "Arnostraße (n143)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n144",
+   "name": "Feldhüterstraße (n144)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n146",
+   "name": "Auerstraße (n146)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n148",
+   "name": "Rauwöhrstraße (n148)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n149",
+   "name": "Grobergerstraße (n149)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n150",
+   "name": "Rauwöhrstraße (n150)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n152",
+   "name": "Hohenaustraße (n152)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n153",
+   "name": "Mutzenweg (n153)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n155",
+   "name": "Schwemmerweg (n155)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n156",
+   "name": "Schwemmerweg (n156)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n157",
+   "name": "Hepfengrabenstraße (n157)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n158",
+   "name": "Hepfengrabenstraße (n158)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n160",
+   "name": "Eckbichl (n160)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n162",
+   "name": "Erlenweg (n162)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n163",
+   "name": "Wasserleite (n163)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n165",
+   "name": "Am Bauhof (n165)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n166",
+   "name": "Am Schloßberg (n166)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n167",
+   "name": "Geigerstraße (n167)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n169",
+   "name": "Hohenaustraße (n169)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n170",
+   "name": "Hohenaustraße (n170)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n171",
+   "name": "Plättenweg (n171)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n172",
+   "name": "Zillenweg (n172)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n174",
+   "name": "Schlecht (n174)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n175",
+   "name": "n175",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n176",
+   "name": "Schlecht (n176)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n178",
+   "name": "n178",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n180",
+   "name": "Innstraße (n180)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n181",
+   "name": "Innstraße (n181)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n183",
+   "name": "Dorfstraße (n183)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n185",
+   "name": "Grießerweg (n185)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n186",
+   "name": "Fadingerweg (n186)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n187",
+   "name": "Am Birbet (n187)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n188",
+   "name": "Am Weinberg (n188)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n189",
+   "name": "Am Weinberg (n189)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n190",
+   "name": "Holzham (n190)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n192",
+   "name": "Winkl (n192)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n193",
+   "name": "Landerstraße (n193)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n195",
+   "name": "Pfaffensteinstraße (n195)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n196",
+   "name": "Holzham (n196)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n197",
+   "name": "Holzham (n197)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n198",
+   "name": "Schloßstraße (n198)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n200",
+   "name": "Sailerbachstraße (n200)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n201",
+   "name": "Marktplatz (n201)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n202",
+   "name": "Eckbichl (n202)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n203",
+   "name": "Anger (n203)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n204",
+   "name": "Am Bürgl (n204)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n206",
+   "name": "Auerstraße (n206)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n208",
+   "name": "Wasserleite (n208)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n209",
+   "name": "Baderstraße (n209)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n210",
+   "name": "Innstraße (n210)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n211",
+   "name": "Unterpößnach (n211)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n212",
+   "name": "Unterpößnach (n212)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  },
+  {
+   "node": "n213",
+   "name": "Zur Schanz (n213)",
+   "mdot_kg_per_s": 0.0316,
+   "kind": "residential_village",
+   "storeys": 2,
+   "size": {
+    "population": 21
+   }
+  }
+ ]
+}

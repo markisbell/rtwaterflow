@@ -29,6 +29,10 @@ EXPECTED_BBOX = {
     # Alpen (Ortskern): the M8 geodata-built bundle — REAL OSM streets on the
     # flat Niederrhein (21-53 m elevations from EU-DEM), UTM32
     "alpen": (51.56, 51.59, 6.49, 6.53),
+    # Neubeuern (Druckzonen): the M8 stage-2c geodata bundle — REAL OSM streets
+    # on the hilly Inn valley in Upper Bavaria (449-527 m from EU-DEM, UTM33),
+    # PRV-zoned across ~78 m of relief
+    "neubeuern": (47.75, 47.81, 12.12, 12.17),
 }
 
 
