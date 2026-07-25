@@ -185,6 +185,15 @@ switch on tank levels, which are always-observed station telemetry); and a
 **break tank hydraulically decouples** the pure-Python raw-water side (wells,
 aquifer, water-right and energy accounting) from the pandapipes network.
 
+**Extended documentation:** the full module map, the three-view observability
+model, and the frontend/persistence/testing layers are in
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**; the EPANET/WNTR validation
+methodology + reproduction in **[docs/BENCHMARKS.md](docs/BENCHMARKS.md)**; the
+OSM/DEM geodata bundle builder in
+**[docs/GEODATA_BUILDER.md](docs/GEODATA_BUILDER.md)**; the DVGW compliance rules
+in **[docs/COMPLIANCE.md](docs/COMPLIANCE.md)**; and the German user manual
+(served at `/manual`) in **[docs/Benutzerhandbuch.md](docs/Benutzerhandbuch.md)**.
+
 ## Input file formats (native to pandapipes)
 
 Five JSON documents per network (`data/networks/<id>/`, validated by pydantic

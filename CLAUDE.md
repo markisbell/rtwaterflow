@@ -1136,3 +1136,40 @@ EPANET < 0.001 bar).
 **M9 — and the M0–M9 build — complete.** Optional roadmap stretch items not
 built (documented as deferred): a live water-age post-processing layer, a STANET
 importer, and pySIMDEUM showcase profiles (§6 M9 "optional").
+
+### 2026-07-23 — Extensive documentation (post-M9, matching rtpowerflow)
+
+On request ("write extensive documentation like in the rtpowerflow repo"), three
+substantial docs were added to match the blueprint repo's documentation depth
+(rtpowerflow ships ARCHITECTURE.md, BENCHMARKS.md, a geodata-extraction doc,
+etc.). Wired into the README via a new "Extended documentation" links paragraph.
+
+- **`docs/ARCHITECTURE.md`** — REPLACES the stale rtheatflow fork-parent doc with
+  a current water-specific architecture (through M9): the three-tier system +
+  data-flow diagram, the three-layer observability model, the backend data
+  pipeline, the step (4-tier retry ladder / PDA+emitter fixed point /
+  StationLiftStdType secant / validity guard), a full module-map table, the wire
+  + strict mode, compliance + the raw-water side, the frontend, persistence,
+  testing/CI, running.
+- **`docs/BENCHMARKS.md`** — NEW (the fork-parent BENCHMARKS.md was deleted at M0):
+  the EPANET/WNTR cross-validation methodology + the delivered M9 results — model
+  mapping (gravity rebuild, D-W roughness, pump omission, pandapipes-own-gradient
+  pressure conversion), Net1/Net3 (< 0.001 bar / ~0.5 %), the swamee-jain pitfall
+  shown harmful on flows, the tank/hydrant/PDA-vs-PDD oracles, physics unit
+  checks, the DVGW corridors, one-command reproduction, honest limitations.
+- **`docs/GEODATA_BUILDER.md`** — NEW (the water analogue of rtpowerflow's
+  GRIDGEN_EXTRACTION): the `tools/bundle_builder` online-snapshot/offline-build
+  pipeline, OSM UTM projection + EU-DEM/DGM elevation, the pinned byte-stable
+  snapshot, the synthesis (MST vs gravity descent tree, PRV zone-splitting), the
+  three shipped bundles + configs, and the CLI.
+
+**Review:** a 2-lens accuracy review (architecture vs code / benchmarks vs the
+validation suite, each verified by running the code) surfaced **6** confirmed
+findings, all fixed: broken `../` cross-refs to the parent-dir roadmap/foundations
+(need `../../` from `docs/`); router count 14 → **13** (`runtime.py` is the app
+singleton, not a router); `_TRUTH_KEYS` conflated with the separate background-
+leak stripping; a reproduction command naming a nonexistent `test_m3_demand.py`
+(→ `test_demand_engine.py`); the storey formula `2.0 + 0.35·storeys` →
+`2.0 + 0.35·(storeys − 1)` (per storey ABOVE ground floor); and the wrong-model
+pressure error cited as ~0.009 bar (the old constant-gradient value) → ~0.004 bar
+under the pandapipes-own-gradient conversion the doc now uses.

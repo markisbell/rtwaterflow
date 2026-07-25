@@ -1,301 +1,326 @@
-> **STALE — fork-parent document.** This file describes **rtheatflow**, the
-> district-heating fork parent of rtwaterflow. The water platform (M0+) is
-> governed by `../IMPLEMENTATION_ROADMAP.md` and `../TECHNICAL_FOUNDATIONS.md`.
-> Retained for platform-architecture reference (engine/StateStore/retry-ladder/
-> recorder conventions still describe the shared platform core); every thermal
-> section (heating curves, supply/return pairs, transient mode) does NOT apply.
-# rtheatflow — Architecture
+# rtwaterflow — Architecture
 
-Real-time district-heating simulation platform on **pandapipes 0.14.0**,
-structurally cloned from [rtpowerflow](https://github.com/markisbell/rtpowerflow)
-(project "netzsim") and translated from electricity to heat. This document
-describes the system as built through M7; [SPEC.md](../SPEC.md) is the binding
-specification, [CLAUDE.md](../CLAUDE.md) the per-milestone build log, and
-[API.md](API.md) the generated route reference.
+Real-time **drinking-water network** simulation platform on **pandapipes
+0.14.0**. rtwaterflow is the cold-water sibling of
+[rtheatflow](https://github.com/markisbell/rtheatflow) (district heating), which
+was itself structurally cloned from the blueprint
+[rtpowerflow](https://github.com/markisbell/rtpowerflow) (project *netzsim*,
+electricity). The three share one platform skeleton — a build-once/step-cheaply
+engine, a three-layer observability model, a WebSocket wire, a recorder/exporter,
+and a React/Leaflet UI — and differ only in the physics domain.
 
-## 1. Design idea: the three-layer view
+This document describes the system as built through **M9** (the full M0–M9
+milestone set). The binding specification lives one level up in
+[`IMPLEMENTATION_ROADMAP.md`](../../IMPLEMENTATION_ROADMAP.md) (milestones + acceptance
+criteria) and [`TECHNICAL_FOUNDATIONS.md`](../../TECHNICAL_FOUNDATIONS.md)
+(adversarially-verified DVGW/DIN constraints and pandapipes capabilities/gaps);
+the running dev log is in [`../CLAUDE.md`](../CLAUDE.md). (The roadmap and
+foundations live in the parent `Wassernetze/` directory, one level above the repo.)
 
-The platform's pedagogical core is showing the gap between what a district
-heating network **does**, what its operator can **measure**, and what the
-operator can **calculate** from those measurements:
+---
 
-| Layer | Content | Source |
+## 1. System overview
+
+rtwaterflow is a three-tier application. A student watches a real German-style
+drinking-water network run in **accelerated real time** — one simulation step is
+one minute of network time — and sees pressures, flow velocities, falling tank
+levels, and DVGW rule violations evolve on a map.
+
+```
+                         ┌───────────────────────────────────────────┐
+   five-file bundle ───► │  Backend (FastAPI, :8002)                  │
+   (JSON, pandapipes-    │                                            │
+    native)             │   data_loader ─► network_builder ─► Simulator
+                         │        (validate)     (pandapipes net)   │  │
+                         │                                          ▼  │
+   REST + WebSocket ◄────┤   API routers  ◄──  StateStore  ◄──  step()   1 min/tick
+                         │                        (ring buffer)        │
+                         └───────────┬──────────────────┬─────────────┘
+                                     │ WS frames        │ line-protocol
+                                     ▼                  ▼
+                    ┌────────────────────────┐   ┌──────────────┐   ┌──────────┐
+                    │  UI (React/Vite/Leaflet │   │  collector   │──►│ InfluxDB │──► Grafana
+                    │       :5175 / :8082)    │   │  (telemetry) │   │  :8088   │    :3002
+                    └────────────────────────┘   └──────────────┘   └──────────┘
+```
+
+**Simulation mechanics.** The engine runs a fixed number of steps per simulated
+day (`STEPS_PER_DAY`, default 1440 = one step per minute) and wraps at day end,
+cycling the diurnal/weekly/seasonal demand profiles. Each tick is a **stationary
+hydraulic snapshot** — a full pandapipes solve — so the model is quasi-static
+(no water-hammer/surge). Wall-clock pacing is one real second per simulated
+minute by default (`STEP_INTERVAL_SECONDS`), giving > 12× real-time headroom on
+the demo bundles.
+
+**Sibling tools.** Two offline helpers feed the platform. The **geodata bundle
+builder** (`tools/bundle_builder/`) turns a real town's OpenStreetMap streets +
+DEM elevations into a five-file bundle (see
+[GEODATA_BUILDER.md](GEODATA_BUILDER.md)). The in-app **NetzStudio editor**
+(ported from the sibling `gridedit` interaction model) lets a user draw a network
+on real streets with live DVGW load-case checking before commissioning it.
+
+**Ports** follow the sibling scheme (netzsim 8000/5173 · rtheatflow 8001/5174 ·
+**rtwaterflow 8002/5175**; compose host ports 8002/8082/8088/3002).
+
+---
+
+## 2. The pedagogical core: three data layers
+
+The platform's teaching invariant is **observability**: the difference between
+what is physically true, what an operator actually measures, and what can be
+estimated from those measurements. Every published frame carries three strictly
+separated views:
+
+| View | German | Content |
 |---|---|---|
-| Reality (Realität) | ground-truth hydraulic + thermal state of every pipe and junction | the pandapipes solve |
-| Measured (Gemessen) | only what placed sensors deliver: heat meters at substations, T/p sensors at nodes, plant SCADA | projection of the truth onto the sensor placement |
-| Estimated (Schätzung) | reconstruction of the unmeasured state from the measurements | forward-simulation observer (a second pandapipes net) |
+| Reality | **Realität** | the complete physics — every junction pressure, every pipe velocity, every hidden leak |
+| Measured | **Gemessen** | only what water meters (`mdot`, `p`), node pressure sensors, and station SCADA actually report — with live vs 15-minute fidelity and honest cold starts |
+| Estimated | **Schätzung** | a **digital-twin observer** (M7): a *second* pandapipes net reconstructed from operator SCADA + noise-free demand priors |
 
-Everything else — controllers acting only on the measured layer, the strict
-observability mode, the honesty tripwire tests — exists to keep those three
-layers genuinely distinct. The `RTHEATFLOW_EXPOSE_GROUND_TRUTH=false` strict
-mode strips the reality layer from **one** shared projection path before
-REST/WS/recorder output; the measured and estimated layers stay visible
-(they are the operator's own data).
+The estimation layer is the heart of the observability lesson. pandapipes has no
+state estimator, so the estimated view is not a filter over the truth — it is an
+independent forward solve driven **only by operator knowledge**: source/tank/
+pump/PRV telemetry (copied from the live dispatch) and the *expected* (noise-free)
+demand for unmetered consumers. Every emitter withdrawal (leak, burst, hydrant)
+is zeroed in the twin. Consequently an anomaly at an **unmetered** node stays
+invisible in the estimate, while the same anomaly at a **metered** consumer
+propagates — the exact teaching point. The deviation between the twin and the
+measurements at sensored points is the innovation signal.
 
-## 2. System landscape
+**Strict mode.** With `EXPOSE_GROUND_TRUTH=false`, the reality layer is withheld
+entirely: truth-only wire keys, background leaks, and all compliance findings are
+stripped from both the WebSocket frames and the recordings, leaving only the
+equipment SCADA a real operator would see. This is enforced at the wire layer
+(a `_TRUTH_KEYS` set), not in the UI.
+
+---
+
+## 3. Backend architecture (`src/rtwaterflow/`)
+
+### 3.1 The data pipeline
+
+A network is a **five-file bundle** of pandapipes-native JSON (see the README's
+input-format section and `models.py`):
 
 ```
-┌─────────────┐  /api (Vite dev proxy / nginx)   ┌──────────────────────────┐
-│  React UI    │ ───────────────────────────────▶ │  FastAPI (61 routes)      │
-│  Leaflet map │ ◀─────────── WS /ws ──────────── │  api/* routers            │
-└─────────────┘        one StepResult per step    │      │ get_app()          │
-                                                  │  ┌───▼────────────────┐   │
-┌─────────────┐  GET /state (poll + dedupe)       │  │ App singleton       │   │
-│  collector   │ ────────────────────────────────▶│  │ Engine·Store·Catalog│   │
-└──────┬──────┘                                   │  └───┬────────────────┘   │
-       │ line protocol                            └──────┼────────────────────┘
-┌──────▼──────┐      ┌─────────┐                  ┌──────▼───────────────────┐
-│  InfluxDB 2  │◀────│ Grafana │                  │ RealtimeEngine (asyncio) │
-└─────────────┘      └─────────┘                  │  to_thread(run_step)     │
-                                                  │  ┌─────────────────────┐ │
-                                                  │  │ Simulator            │ │
-                                                  │  │  pandapipes net      │ │
-                                                  │  │  + twin net (M7)     │ │
-                                                  │  └─────────────────────┘ │
-                                                  │ StateStore → sink →      │
-                                                  │  Recorder / BulkExporter │
-                                                  └──────────────────────────┘
+network_structure.json  →  junctions (name, kind, elevation_m, pn_bar, geo)
+pipes.json              →  pipes (from/to, dn+material | inner_diameter_mm, k, geometry)
+consumers.json          →  sinks (node, archetype kind, size, mdot, storeys)
+supply.json             →  supplies (ext_grid), prvs, tanks, stations, wellfields
+environment.json        →  horizon, t_air_c, day_types, dryness, season
 ```
 
-## 3. Backend
+The pipeline is **build once, step cheaply**:
 
-### 3.1 Engine · Simulator · StateStore
+1. **`data_loader.py`** parses + validates the bundle against the pydantic
+   `models.py` schemas and runs graph-level checks: valid node references,
+   exactly one pressure-fixed head per hydraulically-connected net, every
+   consumer/head reachable over the pipe graph, PRV and pump-station edges are
+   **cut edges** (no bypass pipe — `press_control`/constant-lift pumps produce
+   fictional fields otherwise), no isolated nodes. `load_network_from_docs`
+   validates an in-memory bundle (used by the editor's load-check).
+2. **`pipe_catalog.py`** resolves each pipe's geometry: material → GW 303-1
+   integral roughness (`k`), DN/PE-d-series → inner diameter, `length_km` from
+   the polyline (haversine) when absent.
+3. **`network_builder.py`** builds the pandapipes `net` **once** and a slim
+   `NetIndex` (`net_inputs.py`) mapping domain names to pandapipes element rows.
+   Junctions carry `height_m` (the hydrostatic term, ~0.098 bar/m); consumers are
+   `create_sink`; a head source is `create_ext_grid(type="p")`; PRVs are
+   `create_pressure_control`; pumps use a `StationLiftStdType` (see § 3.2); tanks
+   are ext_grid + a controller.
+4. **`simulator.py`** owns the realtime loop, solving one tick at a time and
+   emitting a `StepResult` (the wire).
+5. **`state.py`** (`StateStore`) holds the rolling history ring buffer;
+   **`engine.py`** drives the tick loop; the **`api/`** routers serve REST + a
+   WebSocket stream from the store.
 
-The blueprint's separation, ported verbatim:
+### 3.2 The step: one honest hydraulic snapshot
 
-* **`RealtimeEngine`** (`engine.py`) — the asyncio tick loop:
-  `result = await asyncio.to_thread(sim.run_step, step, day)` →
-  `await store.publish(result)` → advance the clock → sleep the interval.
-  Pause/resume via `asyncio.Event`, `seek`/`seek_day`/`set_interval`
-  (floor 0.01 s). `reconfigure(inputs)` **awaits the in-flight step**
-  (`stop()`), builds a new Simulator off-thread, resets the store and
-  restarts — a grid swap is never a process restart. The engine holds the
-  estimation policy so it survives swaps; it owns nothing else
-  domain-specific.
-* **`Simulator`** (`simulator.py`) — owns the pandapipes net, the dense
-  profile arrays, weather, heating-curve/Δp controllers, plant dispatch
-  models, storages, the measurement set and the forward observer; exposes
-  the runtime equipment CRUD. `run_step` = apply inputs → retry-ladder
-  solve → collect → observe → estimate → controller step.
-* **`StateStore`** (`state.py`) — latest frame + bounded history deque +
-  WebSocket subscriber set + the recorder sink. **One** `asdict()` +
-  `_project()` path produces every wire frame (REST `/state`, `/history`,
-  every WS message, every recorded CSV row) — strict mode is one `pop()`
-  in one place, never parallel code paths.
+`Simulator.run_step` is the core. Design choices:
 
-### 3.2 Data contract
+- **Warm start (pn_bar only).** Each tick seeds pandapipes with the previous
+  tick's pressures; `_reset_initialization` restores build-time pressures after a
+  failed solve or a topology CRUD op. There is no thermal state to carry.
+- **A four-tier retry ladder** (`solve_with_retry`). Non-convergence is **data,
+  not an exception** — the loop never dies (never-500 discipline; a
+  `PipeflowNotConverged` becomes a `converged=false` frame). The tiers escalate:
+  `colebrook` at n iterations → `colebrook` at 3n → **`swamee-jain`** at 3n
+  (reported `degraded`) → `nikuradse` at 3n (`degraded`). `swamee-jain` (the
+  explicit Colebrook approximation, **hyphen** — the underscore silently falls
+  back to nikuradse, upstream #803) rescues transitional-Reynolds ticks the
+  implicit Colebrook Newton flip-flops on. Colebrook tiers pass
+  `max_iter_colebrook` 100/300 (the upstream inner default of 10 fails on
+  near-stagnant stubs).
+- **The PDA + emitter outer fixed point.** The station loop (`_solve_hydraulic`)
+  is wrapped in a Wagner **pressure-driven-demand** + emitter fixed point: each
+  pass measures the consistency gap (`|factor(p) − sink.scaling|` and
+  `|C·pᴺ¹ − emitter mdot|`), breaks when consistent, else applies a damped update
+  and re-solves (cap 20). Undersupplied taps deliver **less** water
+  (`sink.scaling`), not impossible negative pressures. A **physical-validity
+  guard** downgrades a self-consistent state with negative gauge pressure to
+  `degraded` — an "ok" frame never reports impossible negatives.
+- **The pump station operating point.** pandapipes applies a pump-curve lift
+  explicitly per Newton iteration (no `dPL/dQ` in the Jacobian) and bypasses
+  reverse flow with zero resistance, so against dominant static head a running
+  pump drains the tank backwards at runaway rates. The remedy (M2, runtime-pinned)
+  is `StationLiftStdType` — a *constant* lift shown to the solver — plus a
+  bracketed-secant operating-point search (`lift = curve(Q(lift))`) with
+  EPANET-style check-valve closure when a pump reverses at shutoff head.
 
-Five validated JSON documents per network (`data/networks/<id>/`), pydantic
-v2 models with cross-validation (node references, array lengths, exactly one
-slack, reachability, no dead ends):
+After the solve, **`collect_physics`** reads the pandapipes result tables into
+the wire, a **compliance pass** (§ 3.5) runs in its own try/except, and the
+frame is published to the store.
 
-`network_structure.json` (one entry per **trench node**; the builder expands
-every node into a supply/return junction pair) · `pipes.json` (one entry per
-trench → supply + return pipe, shared geometry) · `consumers.json` (profile
-rows **are** the heat_consumer elements: `q_sh_w`/`q_dhw_w` split,
-return-temperature behavior, design load, optional archetype tag) ·
-`producers.json` (exactly one pressure slack + secondary producers) ·
-`weather.json` (ambient + ground temperature).
+### 3.3 Module map
 
-### 3.3 Build-once and the solve
+| Module | Responsibility |
+|---|---|
+| `models.py` | pydantic schemas for the five files (junctions, `PipeSpec`, `ConsumerSpec`, `SupplySpec`/`PrvSpec`/`TankSpec`/`StationSpec`/`WellFieldSpec`, environment) with domain validators |
+| `data_loader.py` | parse + graph-validate a bundle (disk or in-memory) into `net_inputs` |
+| `pipe_catalog.py` | material → `k`, DN/PE-d-series → bore, length from geometry |
+| `network_builder.py` | build the pandapipes `net` + `NetIndex` once; `BAR_PER_M`, `StationLiftStdType` |
+| `net_inputs.py` | `NetIndex` — the name↔pandapipes-row mapping the solver reuses each tick |
+| `simulator.py` | the realtime step: retry ladder, PDA/emitter loop, station secant, validity guard, `collect_physics`, the `StepResult` wire; `solve_hydraulic` is shared with the estimator |
+| `estimator.py` | the M7 `ForwardObserver` digital twin + `EstimationConfig`; `build_prior_book` (archetype/design demand priors) |
+| `compliance/engine.py` | the DVGW rule pass → typed findings (see [COMPLIANCE.md](COMPLIANCE.md)) |
+| `control/rules.py` | the `RuleEngine` — pump Zweipunktregelung with rule-owned running memory; operator modes auto/on/off |
+| `demand/` | the M3 demand engine: `archetypes.py` (24 h shapes), `engine.py` (`build_demand_profiles`), `w410.py` (fd/fh validation) |
+| `hydraulics/pda.py` | the Wagner `PDAController` (`factor(p, p_req)`) |
+| `hydraulics/emitters.py` | `EmitterController` — hydrant / burst / leak (`mdot = C·max(p,0)ᴺ¹`) |
+| `assets/tank.py` | `WaterTank` — ext_grid + level-integrating controller (fire reserve, overflow/empty, buffer time) |
+| `assets/wellfield.py` | the raw-water side: `Aquifer`, `Well`, `WellField` (drawdown, ageing, water right, energy) |
+| `loadcases.py` | the DVGW W 400-1 three load cases (LF1/LF2/LF3) — the editor's commission gate |
+| `sensors.py` | the measurement layer (meters, node sensors, station SCADA; window machinery) |
+| `recorder.py` / `exporter.py` | per-tick CSV packs; deterministic from-midnight offline replay (byte-compatible with live) |
+| `scenarios.py` | scenario recipes (network + ops + measurements + hydraulics + clock), tolerantly replayed |
+| `network_catalog.py` | the bundle library (`data/network_library.json`) + import of user bundles |
+| `api/` | 13 FastAPI routers (65 routes) — see § 4 and [API.md](API.md) |
+| `engine.py` / `state.py` | the tick loop + the history ring buffer / `StateStore` |
+| `proc_guard.py` / `config.py` | process-identity guard for the launchers / `RTWATERFLOW_`-prefixed settings |
 
-`build_network()` constructs the net **once** per configuration; each tick
-only overwrites element values from dense `[n_elements, ticks]` arrays,
-solves, and reads results. The solver policy (SPEC §3.3, all facts
-runtime-verified against pandapipes 0.14.0):
+### 3.4 The wire and strict mode
 
-* `mode="bidirectional"` is the platform default — temperature-controlled
-  consumers make mass flow depend on arriving temperature; `sequential`
-  silently misses set points.
-* **Retry ladder:** bidirectional `iter=N` → `alpha=0.5` → `alpha=0.2,
-  iter=2N` → sequential (degraded). A deliberate catch-all arm tolerates
-  racing runtime CRUD. If every tier fails the platform **reuses the last
-  converged state** and publishes `converged=false` — solver trouble is
-  data, never an HTTP 500, and the loop never dies.
-* **Platform warm start:** after every converged step the junction results
-  are written back as the next initialization (`pn_bar`/`tfluid_k`);
-  after swaps, topology CRUD or failures the initialization resets to the
-  supply temperature (validated continuation strategy).
-* Derived quantities are computed by the platform, not pandapipes: the
-  **direction-aware** per-pipe loss formula (inlet = upstream node
-  temperature; the naive form overcounts ~20 % on meshed nets), the feed-in
-  KPI `mdot·c̄p·ΔT` (the raw `qext_w` result column is an enthalpy form
-  that does not close the balance), worst-point Δp + argmin, pump
-  electrical power, and a per-step energy-balance check
-  (`summary.balance_err_kw`).
+`StepResult` (the WebSocket frame) is the single source of UI truth: `junctions`,
+`pipes`, `consumers`, `producers` (ext_grid + stations), `tanks`, `wellfields`,
+`emitters`, `estimated`, `findings`, and a `summary` (min-pressure worst point
+over *consumer* junctions, mass balance = feed − delivered − stored − spill −
+exported − emitted, deficit/emitted totals, solver status). A `_TRUTH_KEYS` set
+marks the reality-only wire keys (e.g. `findings`, the full physics) that strict
+mode strips wholesale; background **leak** emitters are additionally hidden — the
+very minimum-night-flow an operator must *detect* — while equipment emitters
+(hydrants, bursts) stay on the wire as SCADA an operator sees. The `estimated`
+block **survives** strict mode — it is derived from measurements, not truth.
 
-### 3.4 Controllers act on the measured layer
+### 3.5 Compliance and the raw-water side
 
-The blueprint's blindness principle: operator-side controllers consume only
-what the operator could see.
+**Compliance** (`compliance/engine.py`) runs after every solve on the collected
+wire and emits typed findings with a German DVGW citation
+([COMPLIANCE.md](COMPLIANCE.md) maps every check): W 400-1 storey minimum
+pressure, PN-10 rest pressure, velocity, hygiene stagnation (per-pipe warnings
+fold into one fleet finding above a threshold so healthy nets never flood the
+alarm center), tank reserve/turnover, W 405 fire flow, W 130 well ageing, WHG
+water right. It runs in its own try/except so a poisoned check degrades to a
+system-info finding, never discarding the converged frame.
 
-* **Heating curve** (`heating_curve.py`) — plant flow temperature as a
-  function of ambient temperature (3G/4G presets), written per tick.
-* **Worst-point Δp control** (`dp_control.py`, Schlechtpunktregelung) —
-  ONE clamped proportional step per tick, after the solve, fed exclusively
-  from `observed_summary.dp_worst_bar` (the minimum over **metered**
-  consumers). No reading → the pump holds. True worst point unmetered →
-  the controller regulates the best measured point and the frame carries a
-  `blind_spot` flag — the UI shows *why* missing sensors hurt.
-* **Storage bookkeeping** (`storage.py`) — charge/discharge branch pair,
-  exactly one active per tick, SoC integration with limits; the idle state
-  keeps a minimum-flow floor (zero-flow branches are singular).
-* **Plant dispatch models** (`producers.py`) — boiler/CHP/heat-pump scalar
-  models on the slack (HP COP from live flow temperature and source
-  temperature).
+**The raw-water side** (`assets/wellfield.py`) is pure Python — a
+**Reinwasserbehälter** (break tank, `TankSpec` kind `break`) hydraulically
+*decouples* wells from the pandapipes network, so wells + a linear-reservoir
+aquifer + accounting are a mass balance, not a hydraulic solve. This is what
+makes the Lauenau drought cascade teachable: drought → falling aquifer → capped
+well yield → empty break tank → the Netzpumpe trips (low-level interlock) →
+draining Hochbehälter → dry taps (via the M5 PDA).
 
-### 3.5 Observability layers
+---
 
-**Measured** (`sensors.py`): the `MeasurementSet` holds which consumers
-carry a heat meter and which nodes a T/p pair; plant SCADA is always
-measured. `observe()` *projects* the collected truth onto that placement —
-never a parallel computation. Fidelity `full` (every step) or `standard`
-(15-minute-window means aligned to simulated time; channels are `null`
-until the first window boundary — the honest cold start).
+## 4. Frontend architecture (`ui/`)
 
-**Estimated** (`estimator.py`, M7): pandapipes has no state estimator
-(nothing like pandapower's WLS), so the estimated layer is a
-**forward-simulation observer** — a deep-copied twin net driven only by
-operator knowledge:
+React + TypeScript + Vite, Leaflet/OpenStreetMap maps. `useStepStream.ts`
+consumes the WebSocket frames; `views/LiveWaterFlow.tsx` splices the three views
+(Realität / Gemessen / Schätzung). The map (`components/MapDiagram.tsx`) colours
+nodes/consumers by pressure (DVGW traffic-light: red < 2.0 bar, green 4–6 bar,
+amber ≥ 8 bar) and pipes by velocity (warn ≥ 2.0 m/s), draws flow-direction
+arrows and equipment markers (⧗ PRV, ⚙ pump, 🗼 tank, 🚒/💥 emitters), and renders
+the geodata attribution. Section components cover every subsystem:
+`AlarmSection` (compliance), `EventSection` (hydrant/burst/leak + PDA toggle),
+`TankSection`, `WellFieldSection`, `EnvironmentSection` (Hitzetag),
+`ConsumerTableSection`, `DrucklinieSection` (a client-side Dijkstra HGL with the
+PRV step visible), `MeasurementPanel`, `WorstPointSection`. `views/NetzStudio.tsx`
+hosts the catalog + import + the **editor** (`editor/`: `model.ts`,
+`streetGraph.ts` street routing, `EditorMap.tsx`, `NetzStudioEditor.tsx`).
+`i18n.ts` enforces DE/EN key parity at compile time (`const en: typeof de`).
 
-* plant SCADA (measured flow temperature; the pump lift is the operator's
-  own setting),
-* metered consumers' channels, fidelity-respecting (a standard-mode cold
-  start is `null` → the prior takes over),
-* **pseudo-priors** for unmetered consumers: the archetype's *expected*
-  profile (deterministic VDI space heating, day-matched to the weather or
-  the placement recipe; the mean DHW across the stochastic variants),
-  scaled to the contracted design load — never the live per-tick truth.
-  Consumers without a known archetype use the planning contract; the
-  `design` prior basis falls back to `q_design · f(T_amb)` degree-hour
-  scaling,
-* operator equipment dispatch (producer/storage setpoints are
-  configuration, always visible on the wire),
-* the true ambient temperature including the override — the plant has a
-  weather station and the override is the operator's own knob (documented
-  design decision).
+---
 
-The twin solves with the same retry ladder; both nets share one
-`collect_physics()` so the estimate mirrors the truth arrays field for
-field. The `estimated.error` block is the observer's **innovation** —
-|twin − measurement| at every sensored point (max/mean for return
-temperature, mass flow, Δp) — computed against measurements, not truth, so
-it is meaningful in strict mode too. Estimation is throttled (a metering
-raster in standard mode plus a wall-clock self-throttle of
-`throttle_factor ×` its own runtime) and the last estimate rides along on
-every frame until refreshed, honestly stamped with the step it estimated.
-Twin non-convergence keeps the stale estimate — estimation failure is data.
+## 5. Persistence & artifacts
 
-Honesty is pinned by tripwire tests: an anomaly injected on an unmetered
-consumer must NOT appear in the estimate (it stays at the prior); the same
-anomaly on a metered consumer must propagate; with no meters at all the
-estimate equals the priors exactly; the error metric rises monotonically as
-coverage shrinks.
+| Where | What |
+|---|---|
+| `data/networks/<id>/` | the seven committed teaching bundles (five JSON files each) |
+| `data/network_library.json` | the catalog index (id, name, character, node/pipe stats) |
+| user networks dir | bundles imported at runtime (`character` `user`) |
+| `data/recordings/` | per-session CSV packs (one file per wire table) + a metadata recipe |
+| in-memory ring buffer | the `StateStore` rolling history (`HISTORY_SIZE` frames) |
+| InfluxDB (`:8088`) + Grafana (`:3002`) | live telemetry via the `collector` service, for time-series dashboards |
+| `tools/bundle_builder/snapshots/` | pinned OSM/DEM snapshots for the geodata bundles |
 
-## 4. Physical fidelity — quasi-static by default, and what that means
+Recordings and the offline exporter are **byte-compatible**: `prepare_replay`
+runs a deterministic from-midnight replay (windows reset, warm state cold-init,
+the non-deterministic observer force-disabled) so an exported day reproduces a
+live recording of the same day file-for-file.
 
-**This is the platform's most important honesty statement.**
+---
 
-* **Hydraulics are always steady state** in pandapipes — no pressure
-  dynamics. At minute resolution this is fine (pressure waves settle in
-  seconds).
-* **Heat transfer per step is steady state too ("quasi-static") in the
-  live loop.** Each tick solves a self-consistent snapshot. A quasi-static
-  sequence does **not** model the transport delay of temperature fronts
-  through long pipes: raise the plant flow temperature and every consumer
-  sees the new temperature *in the same step*, where the real network
-  would wait for the front to travel (minutes to hours at 0.5–1.5 m/s).
-  Losses, mass flows and pressures are correct for each operating point;
-  the *transition* between operating points is idealized. The platform
-  does not fake it, and the UI/manual say so.
-* **Upstream status:** since 0.12 pandapipes contains a transient thermal
-  mode (fluid thermal inertia only — an implicit backward-Euler storage
-  term per pipe section; no pipe-wall or soil capacity). It is
-  undocumented upstream (zero mentions on readthedocs), has open TODOs
-  (issue #534) and a known bug (`transient=True` with `dt=None` crashes
-  the numba path, issue #787 — the platform always passes `dt`
-  explicitly).
-* **Our stance (SPEC §3.5): transient is an exporter-only, opt-in
-  experiment.** `RTHEATFLOW_TRANSIENT=true` switches the offline bulk
-  export replay to transient mode via per-step chaining —
-  `pipeflow(net, mode="bidirectional", transient=True, dt=<seconds per
-  step>, simulation_time_step=<monotonic counter>)` with the internal pit
-  persisting between calls. That is verbatim what `run_timeseries` does
-  internally, and `tests/test_transient_m7.py` proves the chaining
-  reproduces the sanctioned `run_timeseries` recipe bit for bit before
-  relying on it. Any step whose transient tiers fail falls back to the
-  quasi-static ladder automatically and the pack metadata carries a
-  `transient_fallback` marker — never a crash. Sizing guidance: choose
-  pipe `sections` so a section is roughly `v · dt` long, and remember only
-  the water column carries inertia (wall/soil capacity is not modeled).
-  **The live loop stays quasi-static in v1** — enabling live transient
-  would require proving per-step chaining across runtime CRUD, controller
-  writes and failure resets, which remains an open research item.
+## 6. The geodata pipeline
 
-## 5. Recording, export, scenarios
+`tools/bundle_builder/` is an offline two-step pipeline: an **online**
+`make_snapshot` freezes a town's projected OSM streets + sampled DEM elevations
+to a pinned JSON, and an **offline, deterministic** `build_from_snapshot`
+synthesises the five-file bundle from it with only networkx + the stdlib. Three
+shipped bundles use it — `alpen` (flat), `neubeuern` (hilly, PRV-zoned), and
+`kevelaer` (city-scale). Full detail in [GEODATA_BUILDER.md](GEODATA_BUILDER.md).
 
-* **Recorder** (`recorder.py`) — a non-blocking publish sink (dedicated
-  writer thread + queue) that consumes the **projected** frame: what never
-  reaches the wire never reaches the CSVs. One pack per configuration;
-  `metadata.json` is a reproducibility recipe (network + loadgen, sensor
-  placement, controller/plant/estimation config, engine clock).
-* **BulkExporter** (`exporter.py`) — deep-copies the live Simulator (engine
-  briefly parked), normalizes to a from-midnight replay (`prepare_replay`:
-  cold init, SoC 0, fresh measurement windows, released controlled pump,
-  estimation off) and replays whole days back to back. Output packs are
-  **byte-compatible** with live recordings (pinned by test, masking only
-  the wall-clock timestamp and machine-timing columns). The estimated
-  layer is deliberately not recorded — its refresh cadence is wall-clock
-  throttled (machine timing, not physics), and it is recomputable from the
-  recorded measurements.
-* **Scenarios** (`scenarios.py`) — recipes, not snapshots: network id,
-  seeded loadgen policy, equipment ops, sensor layout, controller/plant
-  config, weather override, engine clock. Replay is tolerant per entry.
+---
 
-## 6. API
+## 7. Testing & CI
 
-61 routes (generated reference: [API.md](API.md)), REST for state/control/
-CRUD + one WebSocket pushing the full projected `StepResult` per solved
-step. Blueprint error discipline: 400 validation, 404 missing (`/state`
-only before the first solve), 409 conflicts (second pressure slack, running
-export), 422 semantic limits — and **solver non-convergence is data, never
-a 500**. Swagger at `/docs`; the German user manual is served at `/manual`
-(rendered from `docs/Benutzerhandbuch.md` by an in-house markdown-subset
-renderer — no third-party dependency for one static document).
+**268 backend (pytest) + 36 UI (vitest) tests**, plus `tsc` strict + `vite
+build`. Test categories: the five-file **data contract** + loader guards; per-
+milestone **acceptance** (hydraulics, tanks/pumps, demand, compliance, PDA/
+emitters, wells, observer, geodata, load cases, performance); **cross-tool
+oracles** (`tests/validation/` EPANET Net1/Net3, the tank + hydrant oracles, PDA
+vs WNTR PDD — see [BENCHMARKS.md](BENCHMARKS.md)); **determinism/regression**
+(byte-stable generators + snapshots, recorder↔export byte-compat); the API
+**surface pin** (`test_api_surface.py`, 65 routes) which regenerates
+[API.md](API.md) in lockstep; and the observability **tripwires** (an anomaly at
+an unmetered node must not appear in the estimate).
 
-## 7. Frontend
+Every milestone (and each M8/M9 sub-stage) passed through a **multi-agent
+adversarial-review workflow** (2–3 independent lenses + per-finding verification)
+with every confirmed finding fixed and regression-pinned before commit.
 
-React 18 + TypeScript strict + Vite + **raw Leaflet** (no react-leaflet, no
-chart/state/router libraries; hand-rolled SVG `ProfileGraph`/`Sparkline`).
-One polyline per trench, layers created once per topology and restyled per
-frame via refs; live popups read the latest frame through a ref. Color
-layers are domain-anchored (supply ramp full-hot exactly at the active
-curve's design temperature; velocity warning anchored at 1.5 m/s), and
-**the unknown is styled as unknown**: unsensored elements render in a
-dedicated grey/dash no healthy ramp value can produce.
+CI (GitHub Actions) installs `requirements.txt` + the `dev` extra (which carries
+the test-only `wntr` oracle) and gates the three Docker image builds (backend,
+ui, collector; InfluxDB/Grafana are pulled).
 
-The three-layer segmented control (Realität / Gemessen / Schätzung) is
-always visible. The estimated view uses the blueprint **splice pattern**:
-`frame.estimated`'s junctions/pipes/consumers/summary are overlaid on the
-live frame so the same map and overview components render them; a quality
-badge shows the observer's innovation, the estimate age (stale attachment)
-and its solve time. Fallback chain: truth → observed when the server
-withholds ground truth; est → truth/observed when no estimate exists.
+---
 
-## 8. Ops stack
+## 8. Running it
 
-Docker Compose runs five services: backend (python:3.11-slim, committed
-`data/` baked in), nginx-served UI (SPA fallback, `/api/` prefix strip,
-`/ws` upgrade), InfluxDB 2.7, a polling collector (dedupes on `(day,
-step)`), and a file-provisioned Grafana 11 dashboard. `start_rtheatflow.bat`
-is the Windows dev launcher (port guards, venv check, auto `npm install`,
-health poll, browser open). CI runs pytest, then a test-gated 3-image
-buildx matrix to GHCR.
+```bash
+# Windows (recommended): two consoles + browser
+start_rtwaterflow.bat          # backend :8002, UI :5175
+stop_rtwaterflow.bat
 
-## 9. Performance
+# Local Python
+python -m venv .venv && .venv\Scripts\pip install -r requirements.txt -e .[dev]
+.venv\Scripts\python -m rtwaterflow.main         # backend :8002
+cd ui && npm install && npm run dev              # UI :5175 (proxies /api, /ws)
 
-Solves cost ~20–35 ms warm on laptop-class hardware for village-to-town
-nets (8–488 junctions); the first solve pays the numba JIT (~seconds). The
-1 s/step default has >10× headroom; 0.1 s/step works on the demo nets. The
-forward observer roughly doubles the per-step physics cost when it
-refreshes, which is why it self-throttles and rides stale in between.
+# Docker Compose: backend :8002, UI :8082, InfluxDB :8088, Grafana :3002
+docker compose up -d
+```
+
+Configuration is via `RTWATERFLOW_`-prefixed environment variables (see the
+README and `config.py`): `DEFAULT_NETWORK`, `STEPS_PER_DAY`,
+`STEP_INTERVAL_SECONDS`, `AUTOSTART`, `EXPOSE_GROUND_TRUTH` (strict mode),
+`SOLVER_ITER`, `PDA_ENABLED`, `RECORD`.
