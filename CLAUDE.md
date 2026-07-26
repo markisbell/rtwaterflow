@@ -1173,3 +1173,33 @@ leak stripping; a reproduction command naming a nonexistent `test_m3_demand.py`
 `2.0 + 0.35·(storeys − 1)` (per storey ABOVE ground floor); and the wrong-model
 pressure error cited as ~0.009 bar (the old constant-gradient value) → ~0.004 bar
 under the pandapipes-own-gradient conversion the doc now uses.
+
+### 2026-07-26 — Typeset LaTeX user manual (matching rtpowerflow)
+
+On request, added a full typeset German user manual to match rtpowerflow's
+`docs/Benutzerhandbuch.tex`/`.pdf` (rtwaterflow previously had only the short
+Markdown `/manual` version). **`docs/Benutzerhandbuch.tex`** (+ the committed
+compiled **`docs/Benutzerhandbuch.pdf`**, 35 pages): a KOMA-Script `scrreprt`
+manual — custom `\ui`/`\api` macros, a blue-ruled breakable `beispiel` callout
+environment (tcolorbox), `listings` code blocks, `booktabs`/`tabularx` tables, and
+self-contained **TikZ** diagrams (data flow, the three views, the Drucklinie/HGL,
+two Druckzonen, the Lauenau cascade) instead of screenshots so the source builds
+standalone (`latexmk -pdf`). 18 chapters + 4 appendices covering every M0–M9
+feature: intro/install, the five-file bundle + 7-bundle library, the workflow,
+map/layers, observability + the digital-twin observer, the Alarmzentrale,
+tanks/pumps/zones, demand/weather, events/PDA, wells/aquifer, the editor, the
+geodata builder, the seven per-bundle Szenarien-Rundgänge, export/scenarios,
+Grafana, config, model limits; appendices REST/WS, the input-file format (with a
+minimal-bundle JSON), validation, troubleshooting. Wired into the README's
+"Extended documentation" links. Build artifacts (`.aux/.log/.toc/…`) are not
+committed — only `.tex` + `.pdf`.
+
+**Review:** a focused accuracy pass (verified by reading the code + running the
+build) found the manual essentially clean — **1** confirmed factual fix (the
+loader-contract summary said "exactly one pressure source per connected net"; it
+requires *at least* one — multi-source nets are legal since M2, e.g. Musterdorf's
+ext_grid + tank → corrected to "mindestens eine") plus one clarity fix (a
+conflated real-time-factor phrase). Every walkthrough number, table (bundles,
+archetypes, DVGW checks, config, validation), the 65-route API appendix, and the
+minimal-bundle schema verified correct; LaTeX builds with no errors and no
+undefined references.

@@ -190,9 +190,14 @@ model, and the frontend/persistence/testing layers are in
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**; the EPANET/WNTR validation
 methodology + reproduction in **[docs/BENCHMARKS.md](docs/BENCHMARKS.md)**; the
 OSM/DEM geodata bundle builder in
-**[docs/GEODATA_BUILDER.md](docs/GEODATA_BUILDER.md)**; the DVGW compliance rules
-in **[docs/COMPLIANCE.md](docs/COMPLIANCE.md)**; and the German user manual
-(served at `/manual`) in **[docs/Benutzerhandbuch.md](docs/Benutzerhandbuch.md)**.
+**[docs/GEODATA_BUILDER.md](docs/GEODATA_BUILDER.md)**; and the DVGW compliance
+rules in **[docs/COMPLIANCE.md](docs/COMPLIANCE.md)**. The German **user manual**
+comes in two forms: a short in-app version served at `/manual`
+(**[docs/Benutzerhandbuch.md](docs/Benutzerhandbuch.md)**) and the full typeset
+handbook — 34 pages, 18 chapters + 4 appendices —
+(**[docs/Benutzerhandbuch.pdf](docs/Benutzerhandbuch.pdf)**; LaTeX source
+**[docs/Benutzerhandbuch.tex](docs/Benutzerhandbuch.tex)**, build with
+`latexmk -pdf`).
 
 ## Input file formats (native to pandapipes)
 

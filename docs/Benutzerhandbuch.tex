@@ -1,0 +1,1059 @@
+% rtwaterflow — Benutzerhandbuch (LaTeX-Quelle für das gesetzte PDF)
+% Bauen:  latexmk -pdf Benutzerhandbuch.tex     (oder: pdflatex zweimal)
+% Der in der Anwendung unter /manual eingebettete Kurztext ist Benutzerhandbuch.md;
+% dieses Dokument ist das ausführliche, gesetzte Handbuch mit derselben Tiefe wie
+% das Schwesterprojekt rtpowerflow.
+\documentclass[11pt,a4paper,parskip=half]{scrreprt}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[ngerman]{babel}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{graphicx}
+\graphicspath{{img/}}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,shapes.geometric,fit,backgrounds}
+\usepackage[most]{tcolorbox}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,
+            citecolor=blue!50!black]{hyperref}
+
+% --- Farben (Wasser-Blau als Leitfarbe) ---
+\definecolor{wasser}{RGB}{0,105,148}
+\definecolor{wasserhell}{RGB}{224,240,247}
+\definecolor{shell}{gray}{0.96}
+\definecolor{gruen}{RGB}{60,140,60}
+\definecolor{amber}{RGB}{200,140,0}
+\definecolor{rot}{RGB}{190,40,40}
+
+% --- Eigene Befehle ---
+\newcommand{\ui}[1]{\textsf{\bfseries #1}}      % Oberflächen-Beschriftung
+\newcommand{\api}[1]{\texttt{#1}}               % REST-/WS-Endpunkt
+\newcommand{\file}[1]{\texttt{#1}}              % Datei / Pfad
+
+% --- Beispiel-/Merkkasten (blau umrandet, umbruchfähig) ---
+\newtcolorbox{beispiel}[1][Beispiel]{%
+  breakable, enhanced, colback=wasserhell, colframe=wasser,
+  boxrule=0pt, leftrule=3pt, arc=1pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
+  fonttitle=\bfseries\sffamily, coltitle=wasser, title={#1}}
+
+% --- Code-Listings ---
+\lstset{
+  basicstyle=\ttfamily\small, backgroundcolor=\color{shell},
+  frame=single, framesep=4pt, rulecolor=\color{gray!40},
+  breaklines=true, columns=fullflexible, keepspaces=true,
+  showstringspaces=false, extendedchars=true, inputencoding=utf8,
+  literate={ä}{{\"a}}1 {ö}{{\"o}}1 {ü}{{\"u}}1 {Ä}{{\"A}}1 {Ö}{{\"O}}1
+           {Ü}{{\"U}}1 {ß}{{\ss}}1 {→}{{$\rightarrow$}}1 {≥}{{$\geq$}}1
+           {≤}{{$\leq$}}1 {·}{{$\cdot$}}1 {°}{{$^\circ$}}1}
+
+\emergencystretch=3em
+\hyphenation{Trink-wasser-netz Druck-zonen Hoch-be-hälter Nach-frage-Engine
+             Zu-stands-schätzung Schlecht-punkt}
+
+\title{rtwaterflow\\[0.3em]\Large Benutzerhandbuch}
+\subtitle{Echtzeit-Simulation von Trinkwasser-Verteilnetzen\\für Lehre und
+          Demonstration}
+\author{}
+\date{Stand: Juli 2026}
+
+\begin{document}
+\maketitle
+
+\begin{tcolorbox}[colback=gray!5,colframe=gray!50,arc=1pt,boxrule=0.5pt]
+\small
+\textbf{KI-erzeugte Software.} Quelltext, Tests und Dokumentation dieser
+Plattform — einschließlich dieses Handbuchs — wurden von einem KI-Programmier\-agenten
+(Claude Code, Anthropic) unter menschlicher Leitung geschrieben: eine Person hat
+Anforderungen und Fachentscheidungen vorgegeben, die Ergebnisse geprüft und
+freigegeben. rtwaterflow ist ein Forschungs- und Lehrprojekt; die mitgelieferten
+Netze sind synthetisch bzw.\ aus offenen Geodaten synthetisiert und modellieren
+kein konkretes reales Versorgungsgebiet. \textbf{Lizenz:} MIT (Quelltext und
+Dokumentation); die Hydraulik-Engine \href{https://github.com/e2nIEE/pandapipes}{pandapipes}
+ist eine permissiv lizenzierte (BSD-3) Abhängigkeit.
+\end{tcolorbox}
+
+\tableofcontents
+
+% ===================================================================
+\chapter{Einführung}
+\label{ch:einfuehrung}
+
+\section{Was ist rtwaterflow?}
+
+rtwaterflow ist eine Lehr- und Forschungsplattform, die ein kommunales
+\textbf{Trinkwasser-Verteilnetz in beschleunigter Echtzeit} simuliert. Auf einer
+Karte werden Drücke, Fließgeschwindigkeiten und Fließrichtungen sichtbar;
+fallende Behälterstände, Druckabfälle an Hausanschlüssen, trockenfallende Brunnen
+und die DVGW-Regelverstöße in der Alarmzentrale sind die zentralen Lehreffekte.
+
+Die Plattform ist der Kaltwasser-Zwilling von
+\href{https://github.com/markisbell/rtheatflow}{rtheatflow} (Fernwärme) und
+teilt sich mit diesem und dem Ausgangsprojekt
+\href{https://github.com/markisbell/rtpowerflow}{rtpowerflow} (Strom) einen
+gemeinsamen Plattformkern: eine \emph{einmal bauen, günstig rechnen}-Engine, ein
+dreischichtiges Beobachtbarkeitsmodell, eine WebSocket-Datenleitung, eine
+Aufzeichnung/Export-Schicht und eine React/Leaflet-Oberfläche. Die Unterschiede
+liegen allein in der Physik-Domäne — hier: der stationären Rohrnetzhydraulik nach
+\textbf{Darcy-Weisbach}, gerechnet mit
+\href{https://github.com/e2nIEE/pandapipes}{pandapipes~0.14.0}.
+
+\section{Die drei Anwendungen}
+
+\begin{description}[style=nextline,leftmargin=1.2em]
+\item[Live-Simulation] Das Herzstück: ein Netz läuft Takt für Takt, jeder Takt
+  ist eine vollständige, stationäre Hydraulikrechnung. Sie beobachten das Netz in
+  drei Sichten (Realität, Gemessen, Schätzung), lösen Ereignisse aus (Löschwasser,
+  Rohrbruch, Leckage) und stellen Betriebsmittel (Pumpen, Behälter) und Umwelt
+  (Hitzetag, Dürre) ein.
+\item[NetzStudio-Editor] Zeichnen Sie ein eigenes Netz auf \emph{echten}
+  OpenStreetMap-Straßen, prüfen Sie es live gegen die drei DVGW-Lastfälle (W~400-1)
+  und übernehmen Sie es in die Bibliothek (Kapitel~\ref{ch:editor}).
+\item[Geodaten-Bündelbauer] Ein Offline-Werkzeug, das eine echte deutsche Stadt
+  aus OSM-Straßen und einem Höhenmodell in ein Netzbündel verwandelt
+  (Kapitel~\ref{ch:geodaten}). Drei mitgelieferte Netze (\file{alpen},
+  \file{neubeuern}, \file{kevelaer}) sind so entstanden.
+\end{description}
+
+\section{Das Zeitmodell}
+
+Ein Simulationsschritt entspricht \textbf{einer Minute Netzzeit}. Die Engine
+rechnet eine feste Zahl Schritte je Tag (Standard 1440 = ein Schritt je
+Minute) und wickelt am Tagesende auf einen neuen Tag um — so laufen die
+Tages-, Wochen-, Saison- und Wetterprofile der Nachfrage zyklisch durch. Die
+Wandzeit je Schritt ist voreingestellt auf eine reale Sekunde je Netzminute (ein
+Simulationstag in rund 24 Minuten); die Hydraulikrechnung selbst braucht nur
+einen Bruchteil dieser Sekunde, sodass deutlich schnellere Läufe möglich sind.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\ui{Schritte/Tag} & \ui{Wandzeit/Schritt} & Charakter \\
+\midrule
+1440 & 1,0 s & ein Netztag in 24 Minuten (Standard) \\
+96   & 1,0 s & 15-Minuten-Raster, schneller Durchlauf \\
+1440 & 0,05 s & Zeitraffer für lange Verläufe \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Jeder Takt ist eine \textbf{stationäre Momentaufnahme}. Das Modell ist damit
+quasistatisch: Druckstöße/Wasserschläge (DVGW~W~303) werden bewusst nicht
+gerechnet (siehe Kapitel~\ref{ch:grenzen}).
+
+\section{Validierte Physik}
+\label{sec:validierung-intro}
+
+Ein Lernender muss darauf vertrauen können, dass die Zahlen auf der Karte echte
+Hydraulik sind. Die Engine ist deshalb gegen das unabhängige Referenzwerkzeug
+\textbf{EPANET} (über WNTR) kreuzvalidiert: die Standardnetze \textbf{Net1}
+(9~Knoten) und \textbf{Net3} (92~Knoten), in pandapipes mit \api{swamee-jain}
+nachgebaut, stimmen mit WNTRs EpanetSimulator auf $<0{,}001$~bar (Druck) bzw.\
+$\sim0{,}5\,\%$ (Durchfluss) überein. Behälter- und Hydrantendynamik sowie die
+druckabhängige Nachfrage sind gegen eigene EPANET/WNTR-Orakel geprüft, die
+Nachfrage-Engine gegen den DVGW-Korridor W~410. Die Methodik steht ausführlich in
+Anhang~\ref{app:validierung} und in \file{docs/BENCHMARKS.md}.
+
+\section{Weiterführende Dokumentation}
+
+\begin{description}[leftmargin=1.2em]
+\item[\file{docs/ARCHITECTURE.md}] Die vollständige Systemarchitektur (Module,
+  Datenfluss, die drei Schichten, Solver-Leiter, Frontend).
+\item[\file{docs/BENCHMARKS.md}] Die EPANET/WNTR-Validierung mit Reproduktion.
+\item[\file{docs/GEODATA\_BUILDER.md}] Der Geodaten-Bündelbauer im Detail.
+\item[\file{docs/COMPLIANCE.md}] Jede DVGW-Regel der Alarmzentrale mit Zitatstelle.
+\item[\file{docs/API.md}] Die vollständige REST-/WebSocket-Referenz (65 Routen).
+\end{description}
+
+% ===================================================================
+\chapter{Installation und Start}
+\label{ch:installation}
+
+\section{Windows-Schnellstart (empfohlen)}
+
+\file{start\_rtwaterflow.bat} startet Backend (Port~8002) und Oberfläche
+(Port~5175) in zwei Konsolen und öffnet den Browser. \file{stop\_rtwaterflow.bat}
+beendet alles wieder. Die Launcher erkennen ihre eigenen Prozesse anhand eines
+Fenstertitels und einer Kommandozeilen-Markierung, damit sie fremde
+Python-Prozesse nicht versehentlich beenden.
+
+\section{Docker Compose}
+
+\begin{lstlisting}[language=bash]
+docker compose up -d
+\end{lstlisting}
+
+startet fünf Dienste: Backend (8002), Oberfläche (8082), InfluxDB (8088),
+den Telemetrie-\emph{collector} und Grafana (3002).
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Dienst & Port & Zweck \\
+\midrule
+Backend (FastAPI) & 8002 & REST + WebSocket, die Simulations-Engine \\
+Oberfläche (React) & 8082 & die Bedienoberfläche \\
+InfluxDB & 8088 & Zeitreihen-Speicher \\
+Grafana & 3002 & Langzeit-Dashboards (Kapitel~\ref{ch:grafana}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{beispiel}[Portschema der Geschwisterprojekte]
+netzsim 8000/5173 $\cdot$ rtheatflow 8001/5174 $\cdot$ \textbf{rtwaterflow
+8002/5175} (Compose-Hostports 8002/8082/8088/3002). Mehrere Geschwister laufen so
+kollisionsfrei nebeneinander.
+\end{beispiel}
+
+\section{Lokaler Start (Entwicklung)}
+
+\begin{lstlisting}[language=bash]
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt -e .[dev]
+.venv\Scripts\python -m rtwaterflow.main        # Backend :8002
+cd ui && npm install && npm run dev             # Oberfläche :5175
+\end{lstlisting}
+
+Die Oberfläche leitet \api{/api} und \api{/ws} auf \texttt{127.0.0.1:8002}
+weiter. Der Extra \texttt{[dev]} zieht die Test-Werkzeuge (u.\,a.\ \texttt{wntr}
+für die EPANET-Validierung); für den reinen Betrieb genügt
+\file{requirements.txt}.
+
+% ===================================================================
+\chapter{Das Netz und die Netzbibliothek}
+\label{ch:netz}
+
+\section{Die fünf Dateien eines Netzbündels}
+
+Ein Netz ist ein Bündel aus fünf JSON-Dateien im Verzeichnis
+\file{data/networks/<id>/}. Die Formate sind pandapipes-nah und werden beim Laden
+streng geprüft (Anhang~\ref{app:dateiformat}):
+
+\begin{description}[leftmargin=1.2em]
+\item[\file{network\_structure.json}] Ein Eintrag je Knoten mit \textbf{Geländehöhe}
+  \texttt{elevation\_m} — der hydrostatischen Kernphysik: rund $0{,}098$~bar je
+  Höhenmeter. Optional eine Quellenangabe (\texttt{attribution}) für Geodaten-Netze.
+\item[\file{pipes.json}] Rohre mit Innendurchmesser und integraler Rauheit~$k$.
+  Der Rohrkatalog leitet $k$ aus dem Material (PE/PVC 0{,}1; GGG/St/AZ 0{,}4;
+  GG 1{,}0~mm, GW~303-1) und die lichte Weite aus DN bzw.\ der PE-d-Reihe ab.
+\item[\file{consumers.json}] Verbraucher mit Archetyp und Größe; daraus baut die
+  Nachfrage-Engine (Kapitel~\ref{ch:nachfrage}) realistische Profile. Bei
+  Unterversorgung entnehmen sie druckabhängig weniger (PDA,
+  Kapitel~\ref{ch:ereignisse}).
+\item[\file{supply.json}] Einspeisungen (Festdruckknoten/Hochbehälter), Behälter
+  mit Füllstandsdynamik, Pumpwerke, Druckminderer und Brunnenfelder
+  (Kapitel~\ref{ch:behaelter}, \ref{ch:brunnen}).
+\item[\file{environment.json}] Zeithorizont, Lufttemperatur, Tagestypen,
+  Trockenheit und Jahreszeit für die Nachfrage- und Wettereffekte.
+\end{description}
+
+\section{Die mitgelieferte Bibliothek}
+\label{sec:bibliothek}
+
+Sieben Lehrnetze stehen bereit — vier synthetische Layouts und drei aus echten
+Geodaten synthetisierte Netze. Kapitel~\ref{ch:rundgaenge} führt durch jedes
+einzelne.
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}llrX@{}}
+\toprule
+Netz & Charakter & Knoten & Lehrpunkt \\
+\midrule
+Tutorial Hanglage & Tutorial & 5   & Hydrostatik; der Schlechtpunkt liegt am \emph{höchsten} Abnehmer \\
+Musterdorf        & ländlich & 35  & zwei \textbf{Druckzonen} über einen Druckminderer; Pumpe + Hochbehälter; Hitzetag \\
+Mustertal         & ländlich & 8   & \textbf{Gegenbehälter} — ein Abschnitt kehrt über den Tag die Richtung um \\
+Lauenau           & ländlich & 8   & \textbf{Brunnen \& Grundwasser}; die Dürrekaskade lässt Haushalte trockenfallen \\
+Alpen             & real     & 182 & echtes OSM/EU-DEM, flacher Niederrhein, eine Schwerkraftzone \\
+Neubeuern         & real     & 215 & echtes OSM/EU-DEM, hügeliges Inntal, \textbf{PRV-Druckzonen} über $\sim78$~m Relief \\
+Kevelaer          & real     & 544 & Stadtnetz — der Leistungs-Stresstest ($<100$~ms/Takt) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{beispiel}[Ein eigenes Netz importieren]
+Über \ui{NetzStudio} $\to$ \ui{Import} laden Sie ein eigenes Fünf-Datei-Bündel;
+es erscheint in der Bibliothek mit dem Charakter \emph{user}. Alternativ zeichnen
+Sie eines im Editor (Kapitel~\ref{ch:editor}). Der Loader prüft dabei denselben
+Vertrag wie für die mitgelieferten Netze (Anhang~\ref{app:dateiformat}).
+\end{beispiel}
+
+% ===================================================================
+\chapter{Arbeitsablauf: Netz — Nachfrage — Live}
+\label{ch:arbeitsablauf}
+
+Der typische Ablauf hat drei Schritte: ein Netz wählen, die Nachfrage/Umwelt
+einstellen, die Live-Ansicht beobachten und steuern.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=6mm and 12mm, font=\small,
+  box/.style={draw=wasser, thick, rounded corners=2pt, fill=wasserhell,
+              minimum width=26mm, minimum height=9mm, align=center},
+  arr/.style={-{Latex[length=2mm]}, thick, draw=wasser}]
+\node[box] (bundle) {Fünf-Datei-\\Bündel (JSON)};
+\node[box, right=of bundle] (loader) {\texttt{data\_loader}\\(prüfen)};
+\node[box, right=of loader] (builder) {\texttt{network\_}\\\texttt{builder}};
+\node[box, right=of builder] (sim) {\texttt{Simulator}\\1 min/Takt};
+\node[box, below=10mm of sim] (store) {\texttt{StateStore}\\(Verlauf)};
+\node[box, left=22mm of store] (ui) {Oberfläche\\(WebSocket)};
+\draw[arr] (bundle) -- (loader);
+\draw[arr] (loader) -- (builder);
+\draw[arr] (builder) -- node[above,font=\scriptsize]{pandapipes-Netz} (sim);
+\draw[arr] (sim) -- (store);
+\draw[arr] (store) -- node[above,font=\scriptsize]{Frames} (ui);
+\end{tikzpicture}
+\caption{Der Datenpfad: einmal bauen, günstig rechnen. Jeder Takt überschreibt
+nur die Einspeise-Spalten und löst neu — nie ein Neuaufbau.}
+\label{fig:datenpfad}
+\end{figure}
+
+\section{Schritt 1: Netz wählen oder importieren}
+
+In \ui{NetzStudio} wählen Sie ein Bündel aus der Bibliothek
+(Abschnitt~\ref{sec:bibliothek}) oder importieren ein eigenes. Das gewählte Netz
+wird \textbf{einmal} zu einem pandapipes-Netz gebaut; jeder Takt überschreibt
+danach nur Injektionsspalten (Verbrauchs-Massenströme, Behälterhöhen,
+Pumpenzustände) und rechnet warm gestartet neu (Abbildung~\ref{fig:datenpfad}).
+
+\section{Schritt 2: Nachfrage und Umwelt}
+
+Die Verbraucher tragen Archetyp und Größe; daraus erzeugt die Nachfrage-Engine
+Tages-, Wochen- und Saisonprofile (Kapitel~\ref{ch:nachfrage}). Im Bereich
+\ui{Umwelt} schalten Sie zwischen \ui{Normal} und \ui{Hitzetag} um — letzterer
+hebt Temperatur und Trockenheit, verschiebt die Verbrauchsspitze in den Abend und
+hebt die Nachtflüsse.
+
+\section{Schritt 3: Die Live-Ansicht}
+
+\subsection{Darstellungen}
+Die Karte (Leaflet/OpenStreetMap) zeigt Knoten und Rohre georeferenziert. Die
+\ui{Drucklinie} zeichnet zusätzlich das Höhen- und Druckprofil entlang eines
+Pfades (Kapitel~\ref{ch:karte}). Tabellen listen Verbraucher, Behälter, Brunnen
+und Alarme.
+
+\subsection{Steuerung}
+\ui{Start}/\ui{Pause} steuern den Taktlauf; einzelne Betriebsmittel schalten Sie
+über ihre Regler (Pumpenmodi \ui{Auto}/\ui{Ein}/\ui{Aus}, Dürre-Schieber,
+PDA-Umschalter). Eingaben werden optimistisch angezeigt, sodass auch im
+pausierten Zustand Ihre Bedienung bestätigt wird.
+
+\subsection{Die Übersicht lesen}
+Die \ui{Übersicht} fasst die Schlüsselgrößen jedes Takts zusammen:
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Größe & Bedeutung \\
+\midrule
+Schlechtpunkt & der niedrigste Versorgungsdruck über die \emph{Verbraucher}-Knoten \\
+Massenbilanz & Einspeisung $-$ geliefert $-$ gespeichert $-$ Überlauf $-$ Export $-$ Entnahme \\
+Fehlmenge & unbefriedigte Nachfrage (PDA) \\
+Solver-Status & \texttt{ok} / \texttt{degraded} / \texttt{failed} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Ein niedriger Einspeisedruck (etwa der 0{,}5-bar-Auslauf eines Hochbehälters) ist
+\emph{kein} Netzfehler — der Schlechtpunkt wird deshalb nur über Verbraucher
+gebildet, nie über die Quelle.
+
+\subsection{Interaktion mit Netzelementen}
+Ein Klick auf ein Element öffnet ein Kontextmenü: einen Knoten anpinnen, einen
+\ui{Wasserzähler} oder \ui{Drucksensor} setzen (Kapitel~\ref{ch:beobachtbarkeit}),
+einen Verbraucher hinzufügen. Popups zeigen die ehrlichen Werte — z.\,B.\ Soll-
+gegen Ist-Entnahme eines Verbrauchers, oder In$\to$Out-Druck eines
+Druckminderers.
+
+% ===================================================================
+\chapter{Die Karte und die Ebenen}
+\label{ch:karte}
+
+\section{Druck- und Geschwindigkeitsebene}
+
+Die Ebene \ui{Druck} färbt Knoten und Verbraucher nach dem lokalen Druck, an den
+DVGW-Werten ausgerichtet:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Farbe & Bedeutung \\
+\midrule
+\textcolor{rot}{\textbf{rot}}   & unter 2{,}0~bar (Mindestversorgungsdruck W~400-1) \\
+\textcolor{gruen}{\textbf{grün}} & im Sollband 4--6~bar \\
+\textcolor{amber}{\textbf{gelb}} & ab 8~bar (Ruhedruck) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Die Ebene \ui{Geschwindigkeit} färbt Rohre (Warnung ab 2{,}0~m/s).
+\textbf{Fließrichtungspfeile} zeigen den Durchfluss; in der gemessenen Sicht sind
+sie ausgeblendet, wo keine Messung die Richtung belegt.
+
+\section{Marker}
+Eigene Markierungen tragen Einspeisungen, Druckminderer (mit Soll-/Ist-Druck),
+Pumpwerke (mit Lauflampe und Rückschlag-Alarm), Hochbehälter (mit Füllstand und
+Löschreserve-Band) und Hydranten/Rohrbrüche. Geodaten-Netze zeigen den OSM-/
+EU-DEM-Quellennachweis in der Kartenecke.
+
+\section{Die Drucklinie (hydraulische Höhenlinie)}
+
+Die \ui{Drucklinie} zeichnet entlang eines Pfades die Geländehöhe und darüber die
+Drucklinie (Energiehöhe) — die Stufe eines Druckminderers wird als sichtbarer
+Sprung dargestellt. Der Pfad wird clientseitig per Dijkstra bestimmt (die Rohre
+plus Pseudo-Kanten für Druckminderer und Pumpen).
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\small,scale=1.0]
+% Achsen
+\draw[->] (0,0) -- (10.3,0) node[right,font=\scriptsize]{Weg};
+\draw[->] (0,0) -- (0,4.3) node[above,font=\scriptsize]{Höhe / m};
+% Gelände
+\draw[thick,brown!70!black] (0,3.4) -- (2,3.0) -- (4,2.3) -- (5.0,2.1)
+      -- (7,1.4) -- (9.5,0.7);
+\node[brown!70!black,font=\scriptsize] at (8.8,1.15) {Gelände};
+% Drucklinie oben (Hochzone)
+\draw[thick,wasser] (0,4.0) -- (2,3.85) -- (4,3.55) -- (5.0,3.45);
+% PRV-Sprung
+\draw[dashed,gray] (5.0,3.45) -- (5.0,2.75);
+\node[font=\scriptsize,align=center] at (5.9,3.1) {Druck-\\minderer};
+% Drucklinie unten (Tiefzone)
+\draw[thick,wasser] (5.0,2.75) -- (7,2.4) -- (9.5,1.9);
+\node[wasser,font=\scriptsize] at (2.0,4.15) {Drucklinie};
+% Druck = Differenz
+\draw[<->,gray] (7,1.4) -- (7,2.4) node[midway,right,font=\scriptsize]{Druck};
+% Quelle
+\filldraw[wasser] (0,4.0) circle (2pt) node[above left,font=\scriptsize]{Hochbehälter};
+\end{tikzpicture}
+\caption{Die Drucklinie: der senkrechte Abstand zwischen Drucklinie und Gelände
+ist der Versorgungsdruck. Der Druckminderer setzt die Drucklinie der Tiefzone
+herab und schützt sie vor Überdruck.}
+\label{fig:drucklinie}
+\end{figure}
+
+% ===================================================================
+\chapter{Beobachtbarkeit und Zustandsschätzung}
+\label{ch:beobachtbarkeit}
+
+Der pädagogische Kern der Plattform ist die \textbf{Beobachtbarkeit}: der
+Unterschied zwischen dem, was physikalisch \emph{wahr} ist, dem, was ein Betreiber
+tatsächlich \emph{misst}, und dem, was sich daraus \emph{schätzen} lässt.
+
+\section{Die drei Sichten}
+
+\begin{description}[leftmargin=1.2em]
+\item[Realität] die vollständige Physik — jeder Knotendruck, jede Geschwindigkeit,
+  jede verborgene Leckage.
+\item[Gemessen] nur was Wasserzähler (Durchfluss und Druck), Drucksensoren und die
+  Leitwarte wirklich liefern — mit Live- gegen 15-Minuten-Treue und ehrlichem
+  Kaltstart (ein neuer Zähler zeigt bis zum ersten Fensterabschluss nichts an).
+\item[Schätzung] der \textbf{Digital-Twin-Beobachter}: ein \emph{zweites} Netz,
+  allein aus Operatorwissen rekonstruiert.
+\end{description}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\small, node distance=8mm,
+  v/.style={draw, thick, rounded corners=2pt, minimum width=30mm,
+            minimum height=13mm, align=center}]
+\node[v, fill=gray!8, draw=gray!60] (r) {\textbf{Realität}\\alle Drücke\\+ verborgene Leckage};
+\node[v, right=12mm of r, fill=wasserhell, draw=wasser] (m) {\textbf{Gemessen}\\nur Zähler +\\Sensoren + SCADA};
+\node[v, right=12mm of m, fill=gruen!12, draw=gruen] (s) {\textbf{Schätzung}\\zweites Netz aus\\SCADA + Prioris};
+\draw[-{Latex[length=2mm]}, thick, gray] (r) -- node[above,font=\scriptsize]{Filter} (m);
+\draw[-{Latex[length=2mm]}, thick, wasser] (m) -- node[above,font=\scriptsize]{Vorwärtslösung} (s);
+\end{tikzpicture}
+\caption{Von der Realität bleibt in der gemessenen Sicht nur, was Sensoren
+liefern; die Schätzung rekonstruiert daraus ein eigenständiges Netz.}
+\label{fig:sichten}
+\end{figure}
+
+\section{Messgeräte platzieren}
+
+Über das Kontextmenü setzen Sie \ui{Wasserzähler} an Verbrauchern (liefern
+Durchfluss \texttt{mdot} und lokalen Druck \texttt{p}) und \ui{Drucksensoren} an
+Knoten. Presets belegen typische Konstellationen — z.\,B.\ das \ui{scada}-Preset:
+kritische Druck-Logger an Quelle und Netzenden, ohne Hausanschlusszähler. Die
+Einspeisung ist als Leitwarten-Telemetrie stets gemessen.
+
+\section{Der Beobachter (Digital Twin)}
+
+pandapipes besitzt keinen Zustandsschätzer. Die geschätzte Sicht ist deshalb kein
+Filter über der Wahrheit, sondern eine \textbf{unabhängige Vorwärtslösung}, die
+nur mit Operatorwissen gespeist wird: Quell-/Behälter-/Pumpen-/Druckminderer-Tele\-metrie
+(aus der laufenden Fahrweise übernommen) und die \emph{erwartete}, rauschfreie
+Nachfrage für ungezählte Verbraucher. Jede Emitter-Entnahme (Leckage, Bruch,
+Hydrant) wird im Zwilling zu Null gesetzt.
+
+\begin{beispiel}[Die Ehrlichkeit des Beobachters]
+Ein Rohrbruch an einem \emph{ungezählten} Knoten bewegt die gesamte Schätzung um
+$\approx0$ — er bleibt unsichtbar. Dieselbe Anomalie an einem \emph{gezählten}
+Verbraucher schlägt durch, weil der Zähler die Mehrentnahme liefert. Genau diese
+Asymmetrie ist die Lehre zur Beobachtbarkeit; sie wird von Prüf-Tests
+(\emph{tripwires}) abgesichert. Die Abweichung zwischen Zwilling und Messung an
+den Sensoren ist das Innovationssignal.
+\end{beispiel}
+
+\section{Der strikte Modus}
+
+Mit \texttt{RTWATERFLOW\_EXPOSE\_GROUND\_TRUTH=false} wird die Realitätsschicht
+vollständig zurückgehalten: die Wahrheits-Schlüssel, Hintergrund-Leckagen und alle
+Alarme werden aus den Frames \emph{und} den Aufzeichnungen entfernt — es bleibt
+nur die Anlagen-SCADA, die ein realer Betreiber sähe. Die Schätzung überlebt den
+strikten Modus, weil sie aus Messungen und nicht aus Wahrheit abgeleitet ist.
+
+% ===================================================================
+\chapter{Die Alarmzentrale (Compliance)}
+\label{ch:alarm}
+
+Nach jeder Rechnung prüft eine Regelpass die DVGW-Vorgaben und meldet typisierte
+Befunde mit deutscher Zitatstelle (\file{docs/COMPLIANCE.md} bildet jede Regel
+ab). Ein Befund trägt eine Schwere (\textcolor{rot}{\textbf{Verletzung}} /
+\textcolor{amber}{\textbf{Warnung}} / Info) und einen Nachhaltigkeitszähler.
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Prüfung & DVGW-Grundlage \\
+\midrule
+Mindestversorgungsdruck & W~400-1: $2{,}0 + 0{,}35\cdot(\text{Geschosse}-1)$~bar \\
+Ruhedruck & 8~bar Warnung / 10~bar (PN~10) Verletzung \\
+Geschwindigkeit & $>2{,}0$~m/s (momentan Warnung, dauerhaft Verletzung) \\
+Stagnation/Selbstreinigung & Hygiene (Stundenmittel $<5$~mm/s) \\
+Behälterreserve/-umschlag & Löschreserve, Umschlagzeit $<24$~h \\
+Löschwasser & W~405: 48/96/192~m³/h nach Nutzung, $\geq1{,}5$~bar \\
+Brunnenalterung & W~130: Ergiebigkeitsverlust $>10\,\%$ \\
+Wasserrecht & WHG §§8--10 (Tages-Warnung / Jahres-Verletzung) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{beispiel}[Keine Alarmflut]
+Gesunde Netze lösen keine Flut aus: die per-Rohr-Hygienewarnungen eines fein
+dimensionierten ländlichen Netzes bündeln sich oberhalb einer Schwelle zu
+\emph{einem} Flotten-Befund (Selbstreinigung), sodass gesetzte Anomalien
+hervorstechen. Die gemessene und die geschätzte Sicht erfinden nie ein falsches
+„alles in Ordnung“. Die Compliance läuft in einem eigenen Fehlerkäfig — eine
+gestörte Prüfung wird zum System-Info-Befund, verwirft aber nie den gerechneten
+Takt.
+\end{beispiel}
+
+% ===================================================================
+\chapter{Behälter, Pumpen und Druckzonen}
+\label{ch:behaelter}
+
+\section{Hochbehälter}
+Ein Hochbehälter ist ein Festdruckknoten mit füllstandsintegrierendem Regler: die
+Höhe wird vor der Rechnung als Druck geschrieben und nach der Rechnung explizit
+(Euler) aus dem Zufluss fortgeschrieben (EPANET-Semantik), mit Überlauf- und
+Leerlauf-Klemmen. Kennzahlen: nutzbares Volumen, Löschreserve (mit Alarm bei
+Unterschreitung) und Pufferzeit.
+
+\section{Pumpwerke}
+Ein Pumpwerk folgt einer Q-H-Kennlinie mit Zweipunktregelung
+(Ein-unter/Aus-über einem Behälter-Füllstand). Ein numerischer Kernpunkt: da
+pandapipes den Kennlinienhub \emph{explizit je Newton-Schritt} anwendet und
+Rückwärtsfluss widerstandsfrei durchlässt, drainiert eine laufende Pumpe gegen
+dominante statische Höhe den Behälter rückwärts. Die Plattform zeigt dem Solver
+deshalb einen \emph{konstanten} Hub und findet den ehrlichen Betriebspunkt über
+eine eingeklammerte Sekante — mit Rückschlagorgan-Schließung, wenn eine Pumpe am
+Nullförderpunkt umkehrt.
+
+\begin{beispiel}[Operatormodi]
+Jede Station kennt die Modi \ui{Auto} (Zweipunktregelung), \ui{Ein} und
+\ui{Aus}. Der Modus wird szenariofest gespeichert; eine Rückschlag-Schließung
+kann sich nie in \ui{Auto} festhaken, weil die Regel ihr Laufgedächtnis selbst
+führt (statt es aus \texttt{in\_service} zurückzulesen).
+\end{beispiel}
+
+\section{Druckminderer und Druckzonen}
+Ein Druckminderer (\texttt{press\_control}) hält am Auslauf einen Solldruck und
+bildet die Grenze zwischen zwei \textbf{Druckzonen}. Er muss eine \emph{Schnitt}-Kante
+sein (kein Umgehungsrohr) — sonst sähe die Tiefzone zwei widersprüchliche Höhen.
+Ohne ihn läge eine tief gelegene Zone über 10~bar (PN~10); mit ihm bleibt sie im
+Band (Abbildung~\ref{fig:drucklinie}).
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\small, node distance=9mm,
+  n/.style={circle, draw=wasser, fill=wasserhell, minimum size=6mm, inner sep=0pt}]
+\node[n,label=above:{HB 420 m}] (hb) {};
+\node[n, right=14mm of hb] (h1) {};
+\node[n, right=of h1] (h2) {};
+\node[n, below right=6mm and 8mm of h2, fill=amber!30, draw=amber,
+      label=below:{Druckminderer}] (prv) {};
+\node[n, right=14mm of prv] (t1) {};
+\node[n, right=of t1] (t2) {};
+\begin{scope}[on background layer]
+  \node[fit=(hb)(h1)(h2), draw=gruen, dashed, rounded corners, inner sep=4mm,
+        label=above:{Hochzone 4--6 bar}] {};
+  \node[fit=(t1)(t2), draw=wasser, dashed, rounded corners, inner sep=4mm,
+        label=below:{Tiefzone}] {};
+\end{scope}
+\draw[thick] (hb)--(h1) (h1)--(h2) (h2)--(prv) (prv)--(t1) (t1)--(t2);
+\end{tikzpicture}
+\caption{Zwei Druckzonen, getrennt durch einen Druckminderer als Schnitt-Kante —
+das Grundmuster von Musterdorf und (mehrfach) Neubeuern.}
+\label{fig:druckzonen}
+\end{figure}
+
+% ===================================================================
+\chapter{Nachfrage und Wetter}
+\label{ch:nachfrage}
+
+Die Nachfrage-Engine baut aus Archetyp und Größe realistische Verbrauchsprofile:
+Tagesgang, Wochenendverhalten, Saison, Temperatur-Kopplung und die nächtliche
+Freibad-Rückspülung (DIN~19643). Verbraucher ohne Größenangabe folgen einem
+einfachen Ersatzprofil (\texttt{demand\_factor}).
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Archetyp & Charakter \\
+\midrule
+\texttt{residential\_city} / \texttt{\_village} & Wohnen mit Morgen-/Abendspitze, Wochenendverschiebung \\
+\texttt{industry} & Schichtblock \\
+\texttt{school} & Vormittagspulse \\
+\texttt{office} & Bürotag \\
+\texttt{hospital} & gleichmäßig hoch \\
+\texttt{farm\_dairy} / \texttt{\_pigs} & Melkpulse 05--07/16--18~Uhr, temperaturgekoppelt \\
+\texttt{pool} & Freibad mit Mai--September-Saison und Rückspülung \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Der Hitzetag}
+Der Umschalter \ui{Hitzetag} (Temperaturaufschlag + Trockenheit) verschiebt die
+Spitze in den Abend und hebt die Nachtflüsse — der Trocken-Heiß-Effekt 2018 mit
+abendlichem Bewässerungsblock. Die Umwelt-Sektion zeigt drei ehrliche Zustände
+(\ui{Normal}, \ui{Hitzetag}, \emph{benutzerdefinierte Übersteuerung}) und
+schützt gegen Wettläufe mit dem 5-Sekunden-Poll.
+
+\section{Validierung gegen W~410}
+Die synthetische Jahresstatistik liegt im DVGW-W-410-Korridor: Tages- und
+Stundenspitzenfaktor $f_d = 3{,}9\cdot E^{-0{,}0752}$ bzw.\
+$f_h = 18{,}1\cdot E^{-0{,}1682}$ innerhalb $\pm20\,\%$ (siehe
+Anhang~\ref{app:validierung}).
+
+% ===================================================================
+\chapter{Ereignisse: Löschwasser, Rohrbruch, Leckage}
+\label{ch:ereignisse}
+
+Im Bereich \ui{Ereignisse} legen Sie druckabhängige Entnahmen an. Alle folgen
+einem Emitter-Gesetz $\dot m = C\cdot\max(p,0)^{N_1}$; PDA und Emitter teilen sich
+einen äußeren Fixpunkt.
+
+\begin{description}[leftmargin=1.2em]
+\item[Hydrant] ein W-405-Löschfall, dimensioniert auf eine Zielentnahme; auf dem
+  Draht als Anlagen-Telemetrie sichtbar (auch strikt).
+\item[Rohrbruch] Ausfluss über eine Bruchfläche ($C=C_d\,A\sqrt{2\rho}$, $C_d=0{,}75$).
+\item[Leckage] eine FAVAD-Emitter ($N_1=1{,}15$); \emph{verborgene} Realität — die
+  nächtliche Mindestwassermenge, die der Betreiber erst erkennen muss (im strikten
+  Modus ausgeblendet).
+\end{description}
+
+\section{Druckabhängige Nachfrage (PDA)}
+Der Umschalter \ui{PDA} macht den Kontrast „warum druckabhängige Nachfrage“
+sichtbar. Nach Wagner liefert ein Anschluss bei $p\le p_{\min}$ nichts, bei
+$p\ge p_{\text{req}}$ voll und dazwischen einen Anteil
+$\bigl((p-p_{\min})/(p_{\text{req}}-p_{\min})\bigr)^{1/2}$. Unterversorgte
+Anschlüsse liefern so \emph{weniger} Wasser statt unphysikalisch negativer Drücke;
+ein Physik-Wächter stuft einen selbstkonsistenten Zustand mit negativem Druck
+ehrlich auf \texttt{degraded} herab.
+
+\begin{beispiel}[Ehrliche Verknappung]
+Eine Großentnahme, die das Netz nicht decken kann, führt zu Teilbelieferung, einer
+positiven Fehlmenge und einem stabilen Gleichgewicht bei rund 1{,}5~bar — kein
+negativer Druck, kein Serverfehler. Die gelieferte Menge ist stets
+Wagner-konsistent zum gemeldeten Druck.
+\end{beispiel}
+
+% ===================================================================
+\chapter{Brunnen und Grundwasser}
+\label{ch:brunnen}
+
+Die \textbf{Rohwasserseite} ist reines Python: ein \emph{Reinwasserbehälter}
+(Break Tank) entkoppelt sie hydraulisch vom pandapipes-Netz, sodass Brunnen +
+Grundwasserleiter + Bilanzierung eine Massenbilanz sind, keine Hydraulikrechnung.
+
+\begin{description}[leftmargin=1.2em]
+\item[Grundwasserleiter] ein linearer Speicher: $\mathrm{d}h/\mathrm{d}t =
+  (\text{Anreicherung}\cdot\text{Dürre} - \sum Q)/(S_y A)$, saisonale
+  Anreicherung, Dürrefaktor.
+\item[Brunnen] Absenkung $Q/(Q/s)$, Filterschutz (deckelt die Ergiebigkeit),
+  Alterung (W~130, schneller bei tiefer Absenkung), Regeneration auf 95\,\%,
+  Sichardt-Interferenz.
+\item[Brunnenfeld] speist den Break Tank, bucht das Wasserrecht (WHG) und die
+  Energie in kWh/m³.
+\end{description}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\small, node distance=7mm,
+  b/.style={draw, rounded corners=2pt, minimum width=24mm, minimum height=8mm,
+            align=center}]
+\node[b, fill=wasserhell, draw=wasser] (aq) {Grundwasser-\\leiter};
+\node[b, right=of aq, fill=wasserhell, draw=wasser] (well) {Brunnen};
+\node[b, right=of well, fill=gray!8, draw=gray!60] (bt) {Reinwasser-\\behälter};
+\node[b, right=of bt, fill=amber!20, draw=amber] (np) {Netzpumpe};
+\node[b, right=of np, fill=wasserhell, draw=wasser] (hb) {Hochbehälter};
+\node[b, right=of hb, fill=gruen!12, draw=gruen] (h) {Haushalte};
+\foreach \a/\b in {aq/well, well/bt, bt/np, np/hb, hb/h}
+  \draw[-{Latex[length=2mm]}, thick, wasser] (\a) -- (\b);
+\end{tikzpicture}
+\caption{Die Lauenau-Kette. Dürre $\to$ fallender Grundwasserstand $\to$
+gedeckelte Brunnenergiebigkeit $\to$ leerer Break Tank $\to$ die Netzpumpe fällt
+bei Trockenlauf aus $\to$ der Hochbehälter entleert sich $\to$ Haushalte fallen
+trocken.}
+\label{fig:kaskade}
+\end{figure}
+
+Der Dürre-Schieber und die Regenerier-Schaltfläche je Brunnen machen die Kaskade
+(Abbildung~\ref{fig:kaskade}) im Zeitraffer erlebbar (Kapitel~\ref{ch:rundgaenge},
+Lauenau).
+
+% ===================================================================
+\chapter{Der NetzStudio-Editor}
+\label{ch:editor}
+
+Der \ui{Editor} zeichnet ein Wassernetz auf \textbf{echten OpenStreetMap-Straßen}:
+Quelle, Knoten und Verbraucher setzen (die EU-DEM-Höhe wird je Klick geholt),
+Rohre straßengeführt ziehen (Einrasten + Dijkstra), aus dem Rohrkatalog wählen
+(PE d110/d125/d160, GGG DN100/DN150/DN200).
+
+\section{Live-Prüfung: die drei W-400-1-Lastfälle}
+Vor der Übernahme prüft der Editor das gezeichnete Netz gegen die drei
+Sizing-Lastfälle:
+
+\begin{description}[leftmargin=1.2em]
+\item[LF1 Maximale Förderung] Spitzendurchfluss, Pumpen an $\to$ Geschwindigkeit
+  $\le2{,}0$~m/s.
+\item[LF2 Spitzenstunde Maximaltag] jeder Anschluss $\ge$ seinem Geschossdruck
+  ($2{,}0+0{,}35\cdot(\text{Geschosse}-1)$~bar), $\le8$~bar Ruhedruck.
+\item[LF3 Löschfall] eine W-405-Löschentnahme am hydraulisch schlechtesten Knoten,
+  Fließdruck $\ge1{,}5$~bar.
+\end{description}
+
+Erst ein \emph{bestehendes} Netz lässt sich in die Bibliothek übernehmen; die
+Übernahme nutzt denselben Loader-Vertrag wie ein Import.
+
+% ===================================================================
+\chapter{Der Geodaten-Bündelbauer}
+\label{ch:geodaten}
+
+Das Offline-Werkzeug \file{tools/bundle\_builder} verwandelt eine echte deutsche
+Stadt in ein Fünf-Datei-Bündel. Es ist zweistufig:
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Schritt & Was passiert \\
+\midrule
+\texttt{make\_snapshot} (online) & OSM-Straßengraph holen (osmnx), nach UTM
+  (EPSG:25832/25833) projizieren, Höhen per EU-DEM (OpenTopoData) oder lokalem
+  DGM-GeoTIFF abtasten, alles in einen \emph{gepinnten} JSON-Schnappschuss frieren \\
+\texttt{build\_from\_snapshot} (offline) & aus dem Schnappschuss deterministisch
+  das Netz synthetisieren (nur networkx + Stdlib) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Der Offline-Schritt ist byte-stabil reproduzierbar — genau das ist das
+M8-Akzeptanzkriterium. Aus dem Straßengraphen wird ein Schwerkraftnetz: die größte
+zusammenhängende Komponente $\to$ ein Baum (Minimalspannbaum flach, ein
+Schwerkraft-Abstiegsbaum hügelig) $\to$ eine \texttt{ext\_grid}-Quelle auf dem
+höchsten Knoten $\to$ Verbraucher auf Blatt-/Straßenknoten $\to$ verjüngende
+Durchmesser. Für ein hügeliges Netz fügt \texttt{enable\_prv\_zoning} Druckminderer
+ein, wo der Talwärtsdruck die PN-10-Grenze überschritte. Details in
+\file{docs/GEODATA\_BUILDER.md}.
+
+% ===================================================================
+\chapter{Szenarien-Rundgänge}
+\label{ch:rundgaenge}
+
+Jeder Rundgang nennt, was zu tun ist, \textbf{was man sieht} und \textbf{warum}.
+
+\begin{beispiel}[Tutorial Hanglage — Hydrostatik]
+Starten und einen Tag laufen lassen. \emph{Beobachtung:} Die Einspeisung
+(„Hochbehälter“, 400~m) liegt bei 0{,}5~bar; am 54~m tiefer gelegenen Abnehmer
+stehen $\sim5{,}78$~bar an. Der \textbf{Schlechtpunkt} ist nicht der tiefste,
+sondern der \emph{höchste} Abnehmer ($\sim361$~m). \emph{Lehrpunkt:} $\sim1$~bar je
+10~m Höhe — die Geländehöhe, nicht die Entfernung, bestimmt den Versorgungsdruck.
+\end{beispiel}
+
+\begin{beispiel}[Musterdorf — zwei Druckzonen]
+Die Drucklinie zum tiefsten Abnehmer öffnen. \emph{Beobachtung:} Am Druckminderer
+Talstraße fällt der Druck als sichtbare Stufe auf 2{,}8~bar; ohne ihn läge die
+Tiefzone über 10~bar. Beide Zonen-Mediane liegen im 4--6-bar-Band. Der Hitzetag
+verschiebt die Spitze auf $\sim$19:45. \emph{Lehrpunkt:} Druckzonen schützen die
+tief gelegenen Rohre vor Überdruck.
+\end{beispiel}
+
+\begin{beispiel}[Mustertal — Gegenbehälter]
+Den Abschnitt zum Wasserturm über den Tag beobachten. \emph{Beobachtung:} Der
+Durchfluss kehrt die Richtung um ($\sim+5{,}7$~kg/s tags, $\sim-3{,}2$~kg/s in der
+Schwachlast), während das Schaltband 1{,}2/3{,}4~m gehalten wird. \emph{Lehrpunkt:}
+Ein Gegenbehälter am Netzende füllt sich nachts und stützt tagsüber die Spitze.
+\end{beispiel}
+
+\begin{beispiel}[Lauenau — Dürrekaskade]
+Den Dürre-Schieber hochziehen und mehrere Tage schnell durchlaufen.
+\emph{Beobachtung:} Der Grundwasserstand fällt, die Brunnenkapazität sinkt unter
+die Spitze, der Reinwasserbehälter leert sich, die Netzpumpe fällt bei Trockenlauf
+aus, der Hochbehälter entleert sich — die Haushalte fallen trocken (PDA). Am
+Normaltag: 0{,}385~kWh/m³. \emph{Lehrpunkt:} die Kette Grundwasser $\to$ Brunnen
+$\to$ Behälter $\to$ Netz und wo sie reißt (Abbildung~\ref{fig:kaskade}).
+\end{beispiel}
+
+\begin{beispiel}[Alpen — reales flaches Netz]
+\emph{Beobachtung:} 182 echte Knoten, Drücke über den Tag $\sim2{,}8$--$5{,}9$~bar,
+Spitzengeschwindigkeit $\sim0{,}87$~m/s in der Morgenspitze (weit unter der
+2{,}0-m/s-Warnung), keine Verletzungen; auf der Karte der OSM-/EU-DEM-Quellen\-nachweis.
+\emph{Lehrpunkt:} aus echten Straßen + DGM synthetisierte, solide Netze.
+\end{beispiel}
+
+\begin{beispiel}[Neubeuern — hügelige Druckzonen]
+\emph{Beobachtung:} 215 echte Knoten über $\sim78$~m Relief, sechs Druckminderer
+teilen die Oberstadt von der Talsohle; Drücke $\sim2{,}5$--$6{,}8$~bar, keine Flut.
+Der Löschfall-Lastcheck (LF3) \emph{scheitert} am Schlechtpunkt. \emph{Lehrpunkt:}
+echtes Relief erzwingt echte Druckzonen — und ein Schwerkraftnetz liefert nicht
+überall die Löschwassermenge.
+\end{beispiel}
+
+\begin{beispiel}[Kevelaer — Stadtmaßstab]
+\emph{Beobachtung:} $\sim540$ Knoten, in-band (4{,}3--5{,}2~bar), warmer Takt
+$\sim37$~ms (Beobachter aus). \emph{Lehrpunkt:} die Rechenzeit skaliert mit der
+Zahl der Solver-Aufrufe, nicht mit der Knotenzahl.
+\end{beispiel}
+
+% ===================================================================
+\chapter{Aufzeichnung, Export und Szenarien}
+\label{ch:export}
+
+\section{Szenarien speichern und laden}
+Ein Szenario-Rezept fasst Netz, Betriebshandlungen, Messgeräte, Hydraulik-Einstellungen
+(PDA, Leckagen, Hydranten) und die Uhr in einer bearbeitbaren JSON-Datei zusammen.
+Beim Laden werden die Einträge tolerant wiedergegeben — fehlt ein Element, wird der
+Rest angewandt.
+
+\section{Aufzeichnung und Export}
+\ui{Aufzeichnung} schreibt jeden veröffentlichten Schritt als
+CSV-Paket (eine Datei je Wire-Tabelle) plus ein Metadaten-Rezept. \ui{Tage
+exportieren} spielt die aktuelle Konfiguration offline durch — \textbf{byte-kompatibel}
+zur Live-Aufzeichnung: der Export startet seine gleitenden Fenster und die
+Rohwasserseite ab Mitternacht neu und schaltet den (nicht-deterministischen)
+Beobachter ab, sodass ein exportierter Tag eine Live-Aufzeichnung desselben Tages
+datei-genau reproduziert.
+
+\begin{beispiel}[CSV-Paket auswerten]
+Die Pakete lassen sich direkt mit pandas lesen:
+\begin{lstlisting}[language=Python]
+import pandas as pd
+consumers = pd.read_csv("data/recordings/<sitzung>/consumers.csv")
+tanks     = pd.read_csv("data/recordings/<sitzung>/tanks.csv")
+\end{lstlisting}
+\end{beispiel}
+
+% ===================================================================
+\chapter{Langzeit-Visualisierung mit Grafana}
+\label{ch:grafana}
+
+Im Docker-Stack schreibt der \emph{collector}-Dienst die Telemetrie im
+Line-Protocol nach InfluxDB (Port~8088); Grafana (Port~3002) zeigt sie als
+Zeitreihen-Dashboards. So lassen sich Behälterstände, Zonendrücke und
+Brunnenergiebigkeit über viele simulierte Tage verfolgen — jenseits des
+gleitenden Verlaufspuffers der Oberfläche.
+
+\begin{beispiel}[Zugangsdaten]
+Das Grafana-Dashboard ist datei-provisioniert und läuft mit Entwickler-Zugangsdaten
+gegen ein unauthentifiziertes Backend — bewusst für den lokalen Gebrauch. Vor einer
+Freigabe ins Netz unbedingt Zugangsdaten ändern und absichern.
+\end{beispiel}
+
+% ===================================================================
+\chapter{Konfiguration}
+\label{ch:konfiguration}
+
+Alle Einstellungen sind Umgebungsvariablen mit dem Präfix \texttt{RTWATERFLOW\_}:
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}llX@{}}
+\toprule
+Variable & Standard & Bedeutung \\
+\midrule
+\texttt{PORT} & 8002 & Backend-Port (Schwester-Schema) \\
+\texttt{DEFAULT\_NETWORK} & tutorial\_hillside & Startnetz \\
+\texttt{STEP\_INTERVAL\_SECONDS} & 1{,}0 & Wandzeit je Simulationsminute \\
+\texttt{STEPS\_PER\_DAY} & 1440 & Schritte je Simulationstag \\
+\texttt{AUTOSTART} & true & Engine beim Start laufen lassen \\
+\texttt{EXPOSE\_GROUND\_TRUTH} & true & false = strikter Modus \\
+\texttt{PDA\_ENABLED} & true & druckabhängige Nachfrage (false = Festentnahme-Kontrast) \\
+\texttt{SOLVER\_ITER} & 100 & Basis-Iterationen der Solver-Leiter \\
+\texttt{RECORD} & false & Daueraufzeichnung \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ===================================================================
+\chapter{Grenzen des Modells}
+\label{ch:grenzen}
+
+\begin{description}[leftmargin=1.2em]
+\item[Quasistatisch] Jeder Schritt ist eine stationäre Hydraulikrechnung;
+  Druckstöße (DVGW~W~303) werden nicht berechnet.
+\item[Druckminderer ohne Zustandsautomat] \texttt{press\_control} hält einen
+  Sollwert, hat aber keine echte Ventilmechanik; Zonengrenzen sind statische
+  Schnitte.
+\item[Keine Wassergüte] Wasseralter/Stagnation erscheinen nur als Hygiene-Befund,
+  nicht als Stofftransport.
+\item[Beobachter nicht deterministisch] die Schätzung nutzt eine Wandzeit-Drosselung
+  und ist beim Offline-Export abgeschaltet, damit der Export byte-stabil bleibt.
+\item[Keine Feldvalidierung] die Lehrnetze sind synthetisch bzw.\ aus Geodaten
+  synthetisiert — validiert ist die \emph{Engine} (Anhang~\ref{app:validierung}),
+  nicht ein konkretes reales Versorgungsgebiet.
+\end{description}
+
+Die frühen M0-Grenzen (feste Entnahmen, keine Behälterdynamik) sind längst
+aufgehoben: PDA, Behälter/Pumpen, Brunnen und der Beobachter sind aktiv.
+
+% ===================================================================
+\appendix
+\chapter{REST-/WebSocket-Schnittstelle}
+\label{app:api}
+
+Das Backend bietet 65~Routen; die vollständige Referenz steht in
+\file{docs/API.md} und interaktiv unter \api{/docs} (Swagger). Ein Auszug:
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}llX@{}}
+\toprule
+Methode & Route & Zweck \\
+\midrule
+GET  & \api{/state}      & der aktuelle Frame (gepollt) \\
+GET  & \api{/history}    & der gleitende Verlauf \\
+WS   & \api{/ws}         & der Live-Frame-Strom \\
+GET  & \api{/network}    & Topologie + Anschlusswerte \\
+GET  & \api{/findings}   & Alarme + Schwere-Zählung \\
+GET  & \api{/tanks} / \api{/stations} & Behälter- / Pumpen-SCADA \\
+POST & \api{/station/\{name\}} & Pumpenmodus auto/on/off \\
+GET  & \api{/wellfields} & Brunnenfeld-SCADA \\
+POST & \api{/wellfield/drought} & Dürrefaktor setzen \\
+POST & \api{/pda}        & PDA an/aus \\
+POST & \api{/hydrant} / \api{/burst} / \api{/leakage} & Ereignis anlegen \\
+GET  / POST & \api{/environment} & Wetter lesen/setzen (Hitzetag) \\
+POST & \api{/networks/import} & eigenes Bündel übernehmen \\
+GET  & \api{/manual}     & dieses Handbuch (Kurzfassung) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{lstlisting}[language=bash]
+# aktuellen Zustand abfragen
+curl http://localhost:8002/api/state
+# eine Pumpe von Hand einschalten
+curl -X POST http://localhost:8002/api/station/Pumpwerk -d '{"mode":"on"}'
+# den Live-Strom mitlesen
+websocat ws://localhost:8002/ws
+\end{lstlisting}
+
+\chapter{Eingabedateiformat}
+\label{app:dateiformat}
+
+Fünf JSON-Dokumente je Netz, beim Laden pydantic-geprüft (Knotenreferenzen,
+Ganztags-Horizont, mindestens eine Druckquelle je zusammenhängendem Netz — ein
+ext\_grid oder Behälter; mehrere sind seit M2 zulässig —, Erreichbarkeit aller
+Knoten, keine isolierten Knoten, Druckminderer und Pumpen als Schnitt-Kanten).
+Ein minimales Bündel:
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+// network_structure.json
+{"name":"Mini","junctions":[
+  {"name":"hb","kind":"source","elevation_m":100,"pn_bar":0.5,"geo":[51.5,6.5]},
+  {"name":"a", "kind":"consumer","elevation_m":60,"pn_bar":4.0,"geo":[51.49,6.51]}]}
+// pipes.json
+{"pipes":[{"from_node":"hb","to_node":"a","dn":110,"material":"PE",
+           "geometry":[[51.5,6.5],[51.49,6.51]]}]}
+// consumers.json
+{"consumers":[{"node":"a","name":"Dorf","mdot_kg_per_s":0.2,
+               "kind":"residential_village","storeys":2,"size":{"population":80}}]}
+// supply.json
+{"supplies":[{"node":"hb","name":"Einspeisung","kind":"ext_grid","p_bar":0.5}],
+ "prvs":[],"tanks":[],"stations":[],"wellfields":[]}
+// environment.json
+{"resolution_minutes":15,"steps":96,"t_air_c":[...],"day_types":["workday"],
+ "dryness":[0.3],"season_day_of_year":205}
+\end{lstlisting}
+
+\chapter{Validierung im Detail}
+\label{app:validierung}
+
+Die Hydraulik-Engine ist gegen das unabhängige Referenzwerkzeug EPANET (über
+WNTR) kreuzvalidiert. Die Ergebnisse (voller Text in \file{docs/BENCHMARKS.md}):
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+Prüfung & Referenz & Ergebnis \\
+\midrule
+Netzhydraulik & EPANET Net1 (9~Knoten) + Net3 (92) mit \api{swamee-jain}
+  & Druck $<0{,}001$~bar, Durchfluss $\sim0{,}5\,\%$ \\
+Höhendruck & pandapipes-Höhenbeispiel & 0{,}5~bar@400~m $\to$ 5{,}78~bar; $\pm0{,}01$~bar \\
+Hydrant & EPANET/WNTR-Emitter & Knotendruck $\pm0{,}1$~bar \\
+Behälter & EPANET/WNTR-Behälter & Füllraten-Median $<1$~cm/Takt \\
+Nachfrage (PDA) & WNTR-PDD & Wagner-Kurve auf 0{,}001 \\
+Nachfrage-Hüllkurve & DVGW W~410 $f_d/f_h$ & innerhalb $\pm20\,\%$ \\
+Pumpenergie & TF §5 Korridor & Lauenau $\approx0{,}385$~kWh/m³ \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Die Standardnetze werden dabei als Schwerkraftnetze nachgebaut (jeder Behälter/jede
+Quelle als Festhöhe, Pumpen weggelassen — pandapipes modelliert eine Pumpe als
+Konstant-Hub außerhalb des Newton-Solves; die Pumpen-/Behälter-\emph{Regelung} ist
+über das Behälter-Orakel getrennt geprüft). Der Druck wird mit pandapipes'
+eigenem statischem Gradienten in bar umgerechnet, sodass die Gegenüberstellung die
+hydraulische Höhe vergleicht und nicht einen $\sim0{,}1\,\%$-Dichte-Versatz.
+
+Reproduktion (im \texttt{[dev]}-Venv, das \texttt{wntr} enthält):
+\begin{lstlisting}[language=bash]
+python -m pytest tests/validation -q                     # EPANET Net1/Net3 + PDA
+python -m pytest tests/test_tank_oracle.py \
+                 tests/test_hydrant_oracle.py -q          # Behälter/Hydrant
+\end{lstlisting}
+
+\chapter{Fehlerbehebung}
+\label{app:fehler}
+
+\begin{description}[style=nextline,leftmargin=1.2em]
+\item[Der Beobachter läuft, aber die Schätzung wirkt „eingefroren“.]
+  Der Beobachter drosselt sich über die Wandzeit selbst und ist beim Export
+  bewusst abgeschaltet — im Live-Betrieb aktualisiert er mit eigenem Raster.
+\item[Ein neuer Wasserzähler zeigt nichts an.]
+  Ehrlicher Kaltstart: im 15-Minuten-Modus liefert ein Zähler erst nach dem ersten
+  Fensterabschluss einen Mittelwert.
+\item[Ein Takt meldet \texttt{degraded}.]
+  Die Solver-Leiter musste auf eine gröbere Stufe (swamee-jain/nikuradse)
+  ausweichen, oder der Physik-Wächter hat einen unphysikalischen Zustand
+  herabgestuft — das ist Datum, kein Absturz; der nächste warm gestartete Takt
+  fängt sich meist.
+\item[Docker: das Backend startet nicht.]
+  Prüfen Sie mit \texttt{docker compose logs backend}; Ports 8002/8082/8088/3002
+  dürfen nicht belegt sein.
+\end{description}
+
+\end{document}
