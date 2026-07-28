@@ -46,6 +46,10 @@ class App:
     active: dict = field(default_factory=dict)     # /config/active metadata
     recorder: Recorder | None = None               # session recorder
     exporter: BulkExporter | None = None           # bulk exporter
+    # gamebridge contract-session state (simgames contract v1); an instance
+    # of api.gamebridge.GbState after POST /gb/net/reset (typed loosely to
+    # avoid the runtime<->gamebridge import cycle)
+    gb: object | None = None
 
     @property
     def sim(self) -> Simulator:

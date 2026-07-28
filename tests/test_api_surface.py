@@ -90,6 +90,13 @@ EXPECTED = {
     ("GET", "/editor/geocode"),
     ("POST", "/editor/elevation"),
     ("POST", "/editor/loadcheck"),
+    # gamebridge — simgames co-simulation contract v1 (docs/contract/v1.md)
+    ("GET", "/gb/version"),
+    ("GET", "/gb/result/latest"),
+    ("POST", "/gb/net/reset"),
+    ("POST", "/gb/net/patch"),
+    ("POST", "/gb/step"),
+    ("WS", "/gb/ws"),
     ("WS", "/ws"),
 }
 

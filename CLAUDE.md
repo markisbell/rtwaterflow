@@ -1174,6 +1174,91 @@ leak stripping; a reproduction command naming a nonexistent `test_m3_demand.py`
 pressure error cited as ~0.009 bar (the old constant-gradient value) → ~0.004 bar
 under the pandapipes-own-gradient conversion the doc now uses.
 
+### 2026-07-28 — Gamebridge: simgames co-simulation contract v1 (branch `gamebridge`)
+
+**Built** (spec: `simgames/docs/contract/v1.md` §3.1 water rows — authoritative;
+mirrors rtheatflow's `api/gamebridge.py`, the closest structural sibling): full
+contract v1 surface in `api/gamebridge.py` + puppet mode.
+
+- **Puppet mode**: `RTWATERFLOW_EXTERNAL_CLOCK=true` disables the internal tick
+  loop; `engine._advance_once` extracted as the single shared per-tick body and
+  `engine.external_step()` drives it under the game's clock (lock-serialized,
+  refused while the internal loop runs). 100-step internal/external equivalence
+  pinned on `tutorial_hillside` (identical junctions/pipes/consumers/summary
+  sequences).
+- `POST /gb/net/reset` — topology document → `NetInputs` built **directly from
+  the pydantic models** of `doc.native` (the five-file bundle, verbatim; models
+  + `cross_validate` ARE the contract, no temp-dir round-trip). EVERYTHING is
+  validated before the swap (400 leaves the running net untouched);
+  `engine.reconfigure` at the document's `steps_per_day` raster; recorder
+  auto-stopped; the M7 observer disabled (step-budget; `POST /estimation/config`
+  re-enables); JIT warmup solve without advancing/publishing
+  (`warmup_solve_ms`) — since water's `run_step` integrates tank/aquifer state,
+  the throwaway is unwound via `reset_operations()` (the deterministic-replay
+  normalizer), keeping the warm-start pressures.
+- **Device mapping** (game-side WaterTopology builder convention, pinned by its
+  acceptance smokes): native.supply arrives MINIMAL (one ext_grid head entry);
+  the HEAD source is the FIRST device (slack-first). `water_tower` → the M2
+  `WaterTank` machinery via a synthesized `TankSpec` REPLACING the head
+  ext_grid entry — SHALLOW basin independent of tower height (area =
+  volume_m3/4 m, band 0.2..4.0 m, initial 3.2 m) so tower pressure differences
+  come from `tower_height_m` alone (already folded into the junction's
+  `elevation_m` game-side — never re-added); an EMPTY tower is a **dead head**
+  (new opt-in `WaterTank.empty_head_p_bar`, collapsed ~0.05 bar above the
+  lowest consumer junction — dry zones, not phantom gravity water; the tower
+  junction then reads a negative boundary pressure and the M5 validity guard
+  honestly reports "degraded"; recovers with net inflow). Towerless head
+  well/pump: supply p_bar held while alive, collapsed at `enabled=false` /
+  `yield_factor=0`. Non-head wells/pumps → `pp.create_source` injections
+  (well q = yield_factor×rated_m3_h; pump q = rated while enabled).
+  `Well` gained `yield_factor` (scales available yield; reset restores 1.0)
+  + per-well `last_q_m3_h` SCADA for native wellfield bundles.
+- **Stepping** (`POST /gb/step` = debug fallback, `WS /gb/ws` = step channel;
+  shared `_gb_step`, idempotent `last_t` cache, out-of-order 409/WS error
+  frame): `zone_demand.value` m³/h → the consumer's engine-profile slot at the
+  current tick (÷3.6 — the contract's nominal ρ=1000 wire convention; platform
+  internals keep 998.2), sample-and-hold, never-seen zones 0; zones map by
+  consumer NAME. `weather.temp_c` lands in `profiles.t_air_c[tick]`
+  (accepted + visible; archetype temperature coupling is build-time machinery
+  and game zones are per-tick overrides — documented accept-and-record).
+  Result: status ok/degraded/failed → converged/degraded/failed; zones
+  `supplied` = the **Wagner PDD fraction** (delivered/demand) when PDA is on,
+  else 1.0/0.0, detail `{p_bar}`; `pressure_low` below the M4 compliance
+  table's W 400-1 minimum (warning, critical below half); towers `soc` = level
+  fraction + `detail.level_m`; wells/pumps `detail.q_m3h`; pump coupling_out
+  `p_el_kw = ρ·g·Q·H/η ≥ 0` (rated head for injections, solved feed for a
+  head-bound pump). `GET /gb/result/latest` (404 pre-step). Patch: tolerant
+  per-entry add/remove/set of source-injection wells/pumps (pressure
+  boundaries need a full reset). A native `/config/apply` ends the gb session
+  and restores the configured raster.
+- **Shared fixture** authored in simgames: `tests/contract/fixtures/
+  water_fixture.json` + deterministic stdlib generator `gen_water_fixture.py`
+  (hillside: tower head 200 m³ @ +25 m folded elevation, well + pump
+  injections 1.8 m³/h each, 3 zones at 300/302.5/305 m, 96×900 s with a
+  morning demand peak 0.5–2.5 m³/h + 10→25 °C ramp; golden: supplied ≥ 0.99,
+  zone p_bar ∈ [1.5, 8], tower soc ∈ [0,1], pump p_el ∈ [0.1, 1]; patch probe
+  = a second well). Registered as id "water" in `tests/contract/backends.json`
+  (port 8022, `.venv-water`); `pressure_low` added to the shared
+  `step-result.schema.json` violation kinds (v1.md §3.1 water notes).
+- **Tests: 282 backend** (268 pre-existing kept green + 14 gamebridge: the
+  2 engine-equivalence tests, handshake, 400-before-reset, bad-document
+  rejection, reset→step→idempotent→409→latest roundtrip with device/sign
+  assertions, WS channel incl. error frames, zone sample-and-hold via native
+  `/state`, pump-off → tank drains → pressure falls, empty-tower dead head +
+  recovery, towerless head collapse, patch roundtrip + tolerance, native swap
+  ends the session, reset clears `last_t`). Surface re-pinned (71 routes incl.
+  `/gb/*` + WS `/gb/ws`), docs/API.md regenerated. Shared simgames contract
+  suite: **4 passed** (mock/power/heat/water — water spawns the real backend
+  on 8022, schema-validates every WS step result, golden + patch probe green).
+- **Deviations (documented, deliberate):** gb wire conversions use the
+  contract's nominal ρ=1000 (÷3.6) while platform internals keep 998.2
+  (0.18 % convention gap); source injections are invisible to the native
+  summary's feed/balance bookkeeping (it reads head sources only — cosmetic on
+  the native wire, the contract result derives nothing from it); `weather.temp_c`
+  does not re-shape background archetype demand (build-time machinery);
+  a slack-bound `q_kw`-style setpoint does not exist for water (the §3.1 table
+  gives water devices only `yield_factor`/`enabled`).
+
 ### 2026-07-26 — Typeset LaTeX user manual (matching rtpowerflow)
 
 On request, added a full typeset German user manual to match rtpowerflow's

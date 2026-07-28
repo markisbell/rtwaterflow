@@ -95,6 +95,12 @@ class Well:
     #: live state
     spec_capacity_now: float = 0.0
     running: bool = False
+    #: game-driven yield scaling (simgames contract v1 `well` setpoint
+    #: ``yield_factor`` ∈ [0, 1]: drought/aquifer state the GAME owns —
+    #: scales the well's available yield on top of the physical protection)
+    yield_factor: float = 1.0
+    #: per-well flow of the last produce() pass [m³/h] (SCADA / gb detail)
+    last_q_m3_h: float = 0.0
 
     def __post_init__(self) -> None:
         self.spec_capacity_now = float(self.spec_capacity_m3h_per_m)
@@ -109,7 +115,8 @@ class Well:
                     - (self.screen_top_m + self.protection_margin_m))
         if headroom <= 0:
             return 0.0
-        return min(self.rated_m3_h, headroom * self.spec_capacity_now)
+        return (min(self.rated_m3_h, headroom * self.spec_capacity_now)
+                * max(0.0, min(1.0, self.yield_factor)))
 
     def dynamic_level_m(self, q_m3_h: float, regional_level_m: float,
                         interference_m: float = 0.0) -> float:
@@ -131,6 +138,8 @@ class Well:
     def reset(self) -> None:
         self.spec_capacity_now = float(self.spec_capacity_m3h_per_m)
         self.running = False
+        self.yield_factor = 1.0
+        self.last_q_m3_h = 0.0
 
 
 @dataclass
@@ -215,6 +224,7 @@ class WellField:
             for i, (w, a) in enumerate(zip(self.wells, avail)):
                 q = produced_m3_h * (a / total_avail) if a > 0 else 0.0
                 w.running = q > 1e-6
+                w.last_q_m3_h = q
                 running_now.append(w.running)
                 dd = (w.static_level_m
                       - w.dynamic_level_m(q, self.aquifer.level_m, interf[i]))
@@ -226,6 +236,7 @@ class WellField:
         else:
             for w in self.wells:
                 w.running = False
+                w.last_q_m3_h = 0.0
 
         # aquifer loses the abstracted volume; recharge added inside step
         abstracted_m3_s = produced_m3_h / S_PER_H
@@ -275,6 +286,8 @@ class WellField:
             "n_wells_running": sum(1 for w in self.wells if w.running),
             "wells": [{
                 "name": w.name, "running": w.running,
+                "q_m3_h": round(w.last_q_m3_h, 3),
+                "yield_factor": round(w.yield_factor, 3),
                 "spec_capacity_now": round(w.spec_capacity_now, 3),
                 "spec_capacity_rated": round(w.spec_capacity_m3h_per_m, 3),
                 "aged_fraction": round(

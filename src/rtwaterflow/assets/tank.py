@@ -58,6 +58,12 @@ class WaterTank:
     #: could not keep (EPANET overflow=YES semantics) — split out so the
     #: summary's "stored" stays level-effective (M2 review finding)
     mdot_spill_kg_per_s: float = field(default=0.0, repr=False)
+    #: OPT-IN dead-head override (gamebridge water_tower semantics): the
+    #: boundary pressure written while the tank sits AT ``level_min`` —
+    #: an empty tower must stop supplying (the platform default keeps the
+    #: minimum head and raises the ``empty`` alarm instead; None = default).
+    #: Recovers automatically once net inflow lifts the level off the floor.
+    empty_head_p_bar: float | None = None
 
     # -- head writeback (pre-solve) -----------------------------------------
 
@@ -65,7 +71,11 @@ class WaterTank:
         return self.level_m * BAR_PER_M
 
     def write_p(self, net) -> None:
-        net.ext_grid.at[self.element, "p_bar"] = self.p_bar()
+        p = self.p_bar()
+        if (self.empty_head_p_bar is not None
+                and self.level_m <= self.level_min_m + 1e-9):
+            p = self.empty_head_p_bar
+        net.ext_grid.at[self.element, "p_bar"] = p
 
     # -- level integration (post-solve) --------------------------------------
 
