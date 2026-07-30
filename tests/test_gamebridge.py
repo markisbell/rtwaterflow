@@ -170,6 +170,22 @@ def _minus_solve_ms(result: dict) -> dict:
     return stripped
 
 
+def test_gb_tower_initial_soc_param():
+    """Optional `soc` param (0..1 of the usable band, clamped) sets the
+    tower's initial level — the game replays saved levels across resets
+    (Phase 8). Default stays the 80 % initial fill."""
+    topo = _topology()
+    for dev in topo["devices"]:
+        if dev["kind"] == "water_tower":
+            dev["params"]["soc"] = 0.25
+    with make_api_client(external_clock=True) as client:
+        assert client.post("/gb/net/reset", json=topo).status_code == 200
+        res = client.post("/gb/step", json={"t": 0, "dt_s": 900,
+            "zone_demand": {"wz0": {"value": 1.0}}}).json()
+        # one tick of draw moves the level marginally off the seed
+        assert abs(res["devices"]["tower"]["soc"] - 0.25) < 0.03
+
+
 def test_gb_version_contract():
     with make_api_client(external_clock=True) as client:
         v = client.get("/gb/version").json()

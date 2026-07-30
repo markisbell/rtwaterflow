@@ -250,13 +250,20 @@ def _tower_tank_spec(dev: dict) -> dict:
     params = dev.get("params") or {}
     volume = (float(params["volume_m3"]) if _is_num(params.get("volume_m3"))
               and params["volume_m3"] > 0 else DEFAULT_VOLUME_M3)
+    # optional SoC replay (0..1 fraction of the usable band, clamped —
+    # mirrors the wire's `soc`): the game restores a save / rebuilds the
+    # topology without silently refilling the tower to 80 %
+    level = TOWER_LEVEL_INITIAL_M
+    if _is_num(params.get("soc")):
+        frac = min(max(float(params["soc"]), 0.0), 1.0)
+        level = TOWER_LEVEL_MIN_M + frac * (TOWER_LEVEL_MAX_M - TOWER_LEVEL_MIN_M)
     return {
         "node": dev["node"],
         "name": f"gb_{dev['id']}",
         "area_m2": round(volume / TOWER_DEPTH_M, 6),
         "level_min_m": TOWER_LEVEL_MIN_M,
         "level_max_m": TOWER_LEVEL_MAX_M,
-        "level_initial_m": TOWER_LEVEL_INITIAL_M,
+        "level_initial_m": level,
         "kind": "durchlauf",
     }
 
