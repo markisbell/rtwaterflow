@@ -82,6 +82,7 @@ WaterTopology builder is written against exactly this convention):
 from __future__ import annotations
 
 import asyncio
+import math
 import json
 import logging
 import time
@@ -166,6 +167,7 @@ class GbDevice:
     target: str
     element: int | None = None   # ext_grid or source element index
     tank_name: str | None = None
+    station_name: str | None = None  # inline booster (StationSpec) binding
     base_p_bar: float = DEFAULT_SLACK_P_BAR   # head/slack boundary pressure
     yield_factor: float = 1.0    # well setpoint (sample-and-hold)
     enabled: bool = True         # water_pump setpoint (sample-and-hold)
@@ -382,6 +384,21 @@ def _validate_topology(doc: Any) -> tuple[NetInputs, int, list[dict],
             records.append(GbDevice(
                 id=dev["id"], kind=kind, node=node, params=params,
                 target="slack", base_p_bar=float(bound["p_bar"])))
+        elif kind == "water_pump" and isinstance(params.get("station"), str):
+            # INLINE booster (game 2026-08-02): the pump is a StationSpec
+            # branch in native.supply.stations (suction -> discharge); the
+            # per-step 'enabled' setpoint forces the station on/off via
+            # sim.station_modes, p_el couples from the solved flow. Such a
+            # pump never binds the head, whatever its device order.
+            st_name = params["station"]
+            stations_raw = [st for st in (supply_raw.get("stations") or [])
+                            if isinstance(st, dict)]
+            if not any(st.get("name") == st_name for st in stations_raw):
+                _bad(f"devices[{i}] ({dev['id']!r}): inline station "
+                     f"{st_name!r} not found in native.supply.stations")
+            records.append(GbDevice(
+                id=dev["id"], kind=kind, node=node, params=params,
+                target="station", station_name=st_name))
         elif is_head:  # well/water_pump as the towerless HEAD source
             if not supplies:
                 _bad(f"devices[{i}] ({dev['id']!r}): the head device needs "
@@ -511,6 +528,13 @@ def _resolve_devices(app: App, records: list[GbDevice]) -> None:
                 sim.net, junction=jj,
                 mdot_kg_per_s=_source_q_m3h(dev) / M3H_PER_KG_S,
                 name=f"gb_{dev.id}"))
+        elif dev.target == "station":
+            meta = next((m for m in idx.producer_meta
+                         if m["kind"] == "station"
+                         and m.get("name") == dev.station_name), None)
+            if meta is not None:
+                dev.element = int(meta["element"])
+            sim.station_modes[dev.station_name] = "on" if dev.enabled else "off"
         elif dev.target == "tank":
             # empty tank = DEAD head (game pin): at level_min the boundary
             # collapses to ~HEAD_COLLAPSED_BAR above the LOWEST consumer
@@ -814,6 +838,9 @@ async def _gb_step(app: App, req: Any) -> tuple[int, dict]:
             _write_source(sim, dev)
         elif dev.target in ("head_well", "head_pump"):
             _write_head(sim, dev)
+        elif dev.target == "station":
+            sim.station_modes[dev.station_name] = (
+                "on" if dev.enabled else "off")
     # coupling_in routes onto coupling_load devices — a power-network device
     # kind; the water backend has none, the key is accepted and ignored.
 
@@ -904,6 +931,24 @@ def _build_result(app: App, gb: GbState, t: int, result,
                 p_el = _pump_p_el_kw(q, _head_m(dev.params), _eta(dev.params))
                 detail["p_el_kw"] = round(p_el, 6)
                 coupling_out[did] = {"p_el_kw": round(p_el, 6)}
+        elif dev.target == "station":
+            q_m3h = 0.0
+            try:
+                if dev.element is not None \
+                        and dev.element in sim.net.res_pump.index:
+                    q_m3h = abs(float(sim.net.res_pump.at[
+                        dev.element, "mdot_from_kg_per_s"])) * M3H_PER_KG_S
+            except (AttributeError, KeyError):
+                pass
+            if not math.isfinite(q_m3h):  # out-of-service branches read NaN
+                q_m3h = 0.0
+            p_el = (_pump_p_el_kw(q_m3h, _head_m(dev.params), _eta(dev.params))
+                    if dev.enabled else 0.0)
+            devices_out[did] = {
+                "output_kw": None, "soc": None,
+                "detail": {"q_m3h": round(q_m3h, 6), "inline": True,
+                           "p_el_kw": round(p_el, 6)}}
+            coupling_out[did] = {"p_el_kw": round(p_el, 6)}
         else:  # slack / head_well / head_pump — the bound ext_grid boundary
             prod = prod_by_node.get(dev.node) or (
                 producers[0] if producers else None)

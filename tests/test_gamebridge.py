@@ -555,3 +555,69 @@ def test_gb_reset_clears_last_t():
         assert client.post("/gb/step",
                            json={"t": 4711, "dt_s": 900}).status_code == 200
         assert client.get("/gb/result/latest").json()["t"] == 4711
+
+
+def test_gb_inline_station_booster():
+    """A water_pump with params.station is an INLINE booster: it binds the
+    StationSpec branch from native.supply.stations (game 2026-08-02), its
+    per-step 'enabled' forces station_modes on/off, and its electrical
+    coupling follows the SOLVED branch flow — never the head binding."""
+    native = _native_docs()
+    native["network_structure"]["junctions"] += [
+        {"name": "ps_suc", "kind": "node", "geo": [48.0004, 8.0006],
+         "elevation_m": 302.5, "pn_bar": 4.0},
+        {"name": "ps_dis", "kind": "node", "geo": [48.0004, 8.0007],
+         "elevation_m": 302.5, "pn_bar": 4.0},
+    ]
+    # splice the booster into the wz1->wz2 leg
+    native["pipes"]["pipes"] = [
+        p for p in native["pipes"]["pipes"]
+        if not (p["from_node"] == "wz1" and p["to_node"] == "wz2")
+    ] + [
+        {"from_node": "wz1", "to_node": "ps_suc", "length_km": 0.1,
+         "inner_diameter_mm": 150.0, "k_mm": 0.1},
+        {"from_node": "ps_dis", "to_node": "wz2", "length_km": 0.15,
+         "inner_diameter_mm": 150.0, "k_mm": 0.1},
+    ]
+    native["supply"]["stations"] = [
+        {"from_node": "ps_suc", "to_node": "ps_dis", "name": "booster",
+         "curve": [[0.0, 2.0], [2.0, 1.2], [4.0, 0.1]],
+         "control": {"mode": "manual", "running": True}}]
+    devices = [
+        {"id": "tower", "kind": "water_tower", "node": "twr",
+         "params": {"volume_m3": 40.0, "tower_height_m": 25.0}},
+        {"id": "boost", "kind": "water_pump", "node": "ps_suc",
+         "params": {"rated_m3_h": 2.0, "head_m": 20.0, "eta": 0.6,
+                    "station": "booster"}},
+    ]
+    with make_api_client(external_clock=True) as client:
+        r = client.post("/gb/net/reset", json=_topology(native, devices))
+        assert r.status_code == 200, r.text
+
+        req = {"t": 0, "dt_s": 900, "weather": {"temp_c": 12.0},
+               "zone_demand": {"wz0": {"value": 1.0}, "wz1": {"value": 1.0},
+                               "wz2": {"value": 1.0}},
+               "device_setpoints": {"boost": {"enabled": True}}}
+        r = client.post("/gb/step", json=req)
+        assert r.status_code == 200, r.text
+        res = r.json()
+        boost = res["devices"]["boost"]
+        assert boost["detail"]["inline"] is True
+        assert boost["detail"]["q_m3h"] >= 0.0
+        assert res["coupling_out"]["boost"]["p_el_kw"] >= 0.0
+        p_on = res["zones"]["wz2"]["detail"]["p_bar"]
+
+        req = {"t": 1, "dt_s": 900, "weather": {"temp_c": 12.0},
+               "zone_demand": {"wz0": {"value": 1.0}, "wz1": {"value": 1.0},
+                               "wz2": {"value": 1.0}},
+               "device_setpoints": {"boost": {"enabled": False}}}
+        r = client.post("/gb/step", json=req)
+        assert r.status_code == 200, r.text
+        res = r.json()
+        assert res["devices"]["boost"]["detail"]["p_el_kw"] == 0.0
+        assert res["coupling_out"]["boost"]["p_el_kw"] == 0.0
+        # a forced-off booster in the only path to wz2 cuts it off entirely
+        # (out-of-service branch isolates the junction -> no reading) or at
+        # least costs pressure
+        p_off = res["zones"]["wz2"]["detail"]["p_bar"]
+        assert p_off is None or p_off < p_on + 1e-9
