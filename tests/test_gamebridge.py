@@ -189,7 +189,7 @@ def test_gb_tower_initial_soc_param():
 def test_gb_version_contract():
     with make_api_client(external_clock=True) as client:
         v = client.get("/gb/version").json()
-        assert v["contract"] == "1.1"  # 1.1: water device rows (§3.1)
+        assert v["contract"] == "1.2"  # 1.2 doc-level; 1.1: water device rows
         assert v["backend"] == "rtwaterflow"
         assert "pandapipes" in v["solver"]
         assert v["external_clock"] is True

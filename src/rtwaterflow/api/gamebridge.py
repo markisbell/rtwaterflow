@@ -112,7 +112,8 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/gb", tags=["gamebridge"])
 
-CONTRACT_VERSION = "1.1"  # 1.1: water device rows (contract §3.1)
+CONTRACT_VERSION = "1.2"  # 1.2: doc-level only (grid_forming is power);
+                          # 1.1: water device rows (contract §3.1)
 
 #: contract device kinds this (water) backend accepts (contract §3.1 table)
 DEVICE_KINDS = ("slack", "well", "water_pump", "water_tower")
